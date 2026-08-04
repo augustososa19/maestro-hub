@@ -144,7 +144,7 @@ export function toTimeInput(date: Date) {
 }
 
 export function fromDateTimeInput(date: string, time: string) {
-  const [y, m, d] = date.split("-").map(Number);
-  const [hh, mm] = time.split(":").map(Number);
+  const [y = 1970, m = 1, d = 1] = date.split("-").map(Number);
+  const [hh = 0, mm = 0] = time.split(":").map(Number);
   return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
