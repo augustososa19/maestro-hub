@@ -13,6 +13,8 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated.index'
 import { Route as AuthenticatedAgendaRouteImport } from './routes/_authenticated.agenda'
+import { Route as AuthenticatedAlunosIndexRouteImport } from './routes/_authenticated.alunos.index'
+import { Route as AuthenticatedAlunosIdRouteImport } from './routes/_authenticated.alunos.$id'
 
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
@@ -33,16 +35,31 @@ const AuthenticatedAgendaRoute = AuthenticatedAgendaRouteImport.update({
   path: '/agenda',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAlunosIndexRoute =
+  AuthenticatedAlunosIndexRouteImport.update({
+    id: '/alunos/',
+    path: '/alunos/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAlunosIdRoute = AuthenticatedAlunosIdRouteImport.update({
+  id: '/alunos/$id',
+  path: '/alunos/$id',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/auth': typeof AuthRoute
   '/agenda': typeof AuthenticatedAgendaRoute
+  '/alunos/$id': typeof AuthenticatedAlunosIdRoute
+  '/alunos/': typeof AuthenticatedAlunosIndexRoute
 }
 export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/agenda': typeof AuthenticatedAgendaRoute
   '/': typeof AuthenticatedIndexRoute
+  '/alunos/$id': typeof AuthenticatedAlunosIdRoute
+  '/alunos': typeof AuthenticatedAlunosIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -50,18 +67,22 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/agenda': typeof AuthenticatedAgendaRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/alunos/$id': typeof AuthenticatedAlunosIdRoute
+  '/_authenticated/alunos/': typeof AuthenticatedAlunosIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/agenda'
+  fullPaths: '/' | '/auth' | '/agenda' | '/alunos/$id' | '/alunos/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/auth' | '/agenda' | '/'
+  to: '/auth' | '/agenda' | '/' | '/alunos/$id' | '/alunos'
   id:
     | '__root__'
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/agenda'
     | '/_authenticated/'
+    | '/_authenticated/alunos/$id'
+    | '/_authenticated/alunos/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -99,17 +120,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAgendaRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/alunos/': {
+      id: '/_authenticated/alunos/'
+      path: '/alunos'
+      fullPath: '/alunos/'
+      preLoaderRoute: typeof AuthenticatedAlunosIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/alunos/$id': {
+      id: '/_authenticated/alunos/$id'
+      path: '/alunos/$id'
+      fullPath: '/alunos/$id'
+      preLoaderRoute: typeof AuthenticatedAlunosIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAgendaRoute: typeof AuthenticatedAgendaRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedAlunosIdRoute: typeof AuthenticatedAlunosIdRoute
+  AuthenticatedAlunosIndexRoute: typeof AuthenticatedAlunosIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAgendaRoute: AuthenticatedAgendaRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedAlunosIdRoute: AuthenticatedAlunosIdRoute,
+  AuthenticatedAlunosIndexRoute: AuthenticatedAlunosIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

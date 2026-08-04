@@ -198,7 +198,7 @@ function UserBox({
 }: {
   name: string;
   email: string;
-  photo?: string;
+  photo?: string | undefined;
   onSignOut: () => void;
 }) {
   return (
