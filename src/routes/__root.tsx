@@ -88,6 +88,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { property: "og:title", content: "MusicCRM — Gestão para professores de música" },
+      { name: "twitter:title", content: "MusicCRM — Gestão para professores de música" },
+      { property: "og:description", content: "Organize alunos, agenda e materiais de aula em um único lugar. CRM leve para professores particulares de música." },
+      { name: "twitter:description", content: "Organize alunos, agenda e materiais de aula em um único lugar. CRM leve para professores particulares de música." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d8dfefb6-d102-4f85-a0f0-1b2221007715/id-preview-aa230854--ae5e4419-df96-482c-898d-5ebaf1e88079.lovable.app-1785886881481.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/d8dfefb6-d102-4f85-a0f0-1b2221007715/id-preview-aa230854--ae5e4419-df96-482c-898d-5ebaf1e88079.lovable.app-1785886881481.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
