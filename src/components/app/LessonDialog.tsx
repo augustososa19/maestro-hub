@@ -59,6 +59,13 @@ export function LessonDialog({
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
 
+  // Quick-create student state
+  const [showNewStudent, setShowNewStudent] = useState(false);
+  const [newStudentName, setNewStudentName] = useState("");
+  const [newStudentWhatsapp, setNewStudentWhatsapp] = useState("");
+  const [newStudentInstrument, setNewStudentInstrument] = useState("Violão");
+  const [savingStudent, setSavingStudent] = useState(false);
+
   useEffect(() => {
     if (!draft) return;
     const base = draft.lesson;
@@ -71,6 +78,9 @@ export function LessonDialog({
     setStatus(base?.status ?? "agendada");
     setLocation(base?.location ?? "");
     setNotes(draft.duplicate ? (base?.notes ?? "") : (base?.notes ?? ""));
+    setShowNewStudent(false);
+    setNewStudentName("");
+    setNewStudentWhatsapp("");
   }, [draft]);
 
   const student = useMemo(() => students.find((s) => s.id === studentId), [students, studentId]);
@@ -87,6 +97,34 @@ export function LessonDialog({
     return isWithinAvailability(fromDateTimeInput(date, time), Number(duration), availability, blocks);
   }, [date, time, duration, availability, blocks]);
 
+  const createStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !newStudentName.trim()) return;
+    setSavingStudent(true);
+    const { data, error } = await supabase
+      .from("students")
+      .insert({
+        teacher_id: user.id,
+        name: newStudentName.trim(),
+        whatsapp: newStudentWhatsapp || null,
+        instrument: newStudentInstrument,
+        status: "ativo",
+      })
+      .select()
+      .single();
+    setSavingStudent(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(`Aluno "${newStudentName}" cadastrado!`);
+    await invalidate();
+    setStudentId(data.id);
+    setShowNewStudent(false);
+    setNewStudentName("");
+    setNewStudentWhatsapp("");
+  };
+
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -94,9 +132,16 @@ export function LessonDialog({
       toast.error("Selecione um aluno.");
       return;
     }
-    if (status !== "cancelada" && !availabilityCheck.ok) {
-      toast.error(availabilityCheck.reason ?? "Horário indisponível.");
-      return;
+    // Bloqueia somente se o professor configurou disponibilidade e o horário está fora
+    // (quando não há disponibilidade configurada, qualquer horário é válido)
+    if (status !== "cancelada" && !availabilityCheck.ok && availabilityCheck.reason) {
+      // Só bloqueia se for por dia bloqueado explicitamente, não por falta de configuração
+      if (availabilityCheck.reason.startsWith("Dia bloqueado")) {
+        toast.error(availabilityCheck.reason);
+        return;
+      }
+      // Para restrições de horário, mostra aviso mas deixa salvar
+      toast.warning(`Aviso: ${availabilityCheck.reason}`);
     }
     setSaving(true);
     const payload = {
@@ -146,21 +191,83 @@ export function LessonDialog({
         </DialogHeader>
 
         <form onSubmit={save} className="space-y-4">
+          {/* Seleção de Aluno + botão Novo Aluno */}
           <div className="space-y-2">
-            <Label>Aluno</Label>
-            <Select value={studentId} onValueChange={setStudentId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o aluno" />
-              </SelectTrigger>
-              <SelectContent>
-                {students.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                    {s.instrument ? ` · ${s.instrument}` : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between">
+              <Label>Aluno</Label>
+              <button
+                type="button"
+                onClick={() => setShowNewStudent((v) => !v)}
+                className="text-xs font-medium text-primary hover:underline focus:outline-none"
+              >
+                {showNewStudent ? "← Cancelar" : "+ Novo aluno"}
+              </button>
+            </div>
+
+            {/* Painel inline de cadastro rápido */}
+            {showNewStudent ? (
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <p className="text-xs font-semibold text-primary">Cadastro rápido de aluno</p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1 sm:col-span-2">
+                    <Label htmlFor="ns-nome" className="text-xs">Nome *</Label>
+                    <Input
+                      id="ns-nome"
+                      placeholder="Nome completo"
+                      value={newStudentName}
+                      onChange={(e) => setNewStudentName(e.target.value)}
+                      required
+                      autoFocus
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="ns-wa" className="text-xs">WhatsApp</Label>
+                    <Input
+                      id="ns-wa"
+                      placeholder="(11) 99999-0000"
+                      value={newStudentWhatsapp}
+                      onChange={(e) => setNewStudentWhatsapp(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="ns-inst" className="text-xs">Instrumento</Label>
+                    <select
+                      id="ns-inst"
+                      value={newStudentInstrument}
+                      onChange={(e) => setNewStudentInstrument(e.target.value)}
+                      className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {["Violão", "Guitarra", "Piano", "Teclado", "Baixo", "Bateria", "Canto", "Violino", "Saxofone", "Flauta", "Ukulele", "Outro"].map((i) => (
+                        <option key={i} value={i}>{i}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="w-full"
+                  disabled={savingStudent || !newStudentName.trim()}
+                  onClick={createStudent}
+                >
+                  {savingStudent ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar e selecionar aluno"}
+                </Button>
+              </div>
+            ) : (
+              <Select value={studentId} onValueChange={setStudentId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={students.length === 0 ? "Nenhum aluno — clique em + Novo aluno" : "Selecione o aluno"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {students.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                      {s.instrument ? ` · ${s.instrument}` : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -240,9 +347,13 @@ export function LessonDialog({
             <Textarea id="obs" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
-          {!availabilityCheck.ok && (
-            <p className="rounded-md bg-warning/15 px-3 py-2 text-xs text-warning-foreground">
-              {availabilityCheck.reason}
+          {!availabilityCheck.ok && availabilityCheck.reason && (
+            <p className={`rounded-md px-3 py-2 text-xs ${
+              availabilityCheck.reason.startsWith("Dia bloqueado")
+                ? "bg-destructive/10 text-destructive"
+                : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+            }`}>
+              {availabilityCheck.reason.startsWith("Dia bloqueado") ? "🚫" : "⚠️"} {availabilityCheck.reason}
             </p>
           )}
 
@@ -254,7 +365,7 @@ export function LessonDialog({
             ) : (
               <span />
             )}
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving || showNewStudent}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? "Salvar" : "Agendar"}
             </Button>
           </DialogFooter>

@@ -98,26 +98,33 @@ export function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) {
   return aStart < bEnd && bStart < aEnd;
 }
 
-/** Verifica se um intervalo cabe na disponibilidade e fora de bloqueios. */
+/** Verifica se um intervalo cabe na disponibilidade e fora de bloqueios.
+ * Se nenhuma disponibilidade estiver configurada, libera qualquer horário.
+ */
 export function isWithinAvailability(
   start: Date,
   durationMinutes: number,
   availability: Availability[],
   blocks: BlockedDate[],
 ): { ok: boolean; reason?: string } {
-  const end = new Date(start.getTime() + durationMinutes * 60000);
   const dateStr = toDateInput(start);
 
+  // Verifica bloqueios explícitos de datas (férias, feriados, etc.)
   const blocked = blocks.find((b) => dateStr >= b.start_date && dateStr <= b.end_date);
   if (blocked) {
     return { ok: false, reason: `Dia bloqueado${blocked.reason ? `: ${blocked.reason}` : ""}.` };
   }
 
+  // Se o professor não configurou disponibilidade, libera qualquer horário
+  if (availability.length === 0) return { ok: true };
+
   const slots = availability.filter((a) => a.weekday === start.getDay());
-  if (slots.length === 0) return { ok: false, reason: "Você não atende nesse dia da semana." };
+  if (slots.length === 0) return { ok: false, reason: "Você não atende nesse dia da semana. Configure sua disponibilidade em Configurações." };
 
   const startMin = start.getHours() * 60 + start.getMinutes();
   const endMin = startMin + durationMinutes;
+  const end = new Date(start.getTime() + durationMinutes * 60000);
+
   const fits = slots.some((s) => startMin >= toMinutes(s.start_time) && endMin <= toMinutes(s.end_time));
   if (!fits) {
     const windows = slots.map((s) => `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`).join(", ");
@@ -148,3 +155,60 @@ export function fromDateTimeInput(date: string, time: string) {
   const [hh = 0, mm = 0] = time.split(":").map(Number);
   return new Date(y, m - 1, d, hh, mm, 0, 0);
 }
+
+export type FinancialTransaction = {
+  id: string;
+  student_id?: string | null;
+  student_name?: string | null;
+  description: string;
+  amount: number;
+  type: "receita" | "despesa";
+  category: "mensalidade" | "aula_avulsa" | "pacote" | "equipamento" | "outros";
+  status: "pago" | "pendente" | "atrasado";
+  payment_method: "pix" | "dinheiro" | "cartao" | "transferencia";
+  due_date: string;
+  paid_at?: string | null;
+};
+
+export type CurriculumModule = {
+  id: string;
+  title: string;
+  level: "Iniciante" | "Intermediário" | "Avançado";
+  topics: { id: string; title: string; completed: boolean }[];
+};
+
+export const DEFAULT_CURRICULUM_MODULES: CurriculumModule[] = [
+  {
+    id: "mod-1",
+    title: "Módulo 1: Fundamentos & Postura",
+    level: "Iniciante",
+    topics: [
+      { id: "t1", title: "Postura & Empunhadura Correta", completed: true },
+      { id: "t2", title: "Afinação & Leitura de Tablaturas/Partitura Básica", completed: true },
+      { id: "t3", title: "Primeiros Acordes Abertos (C, G, D, Em, Am)", completed: true },
+      { id: "t4", title: "Primeiros Padrões de Ritmo & Levadas Básicas", completed: false },
+    ],
+  },
+  {
+    id: "mod-2",
+    title: "Módulo 2: Harmonia & Escalas",
+    level: "Intermediário",
+    topics: [
+      { id: "t5", title: "Escala Pentatônica Maior & Menor", completed: false },
+      { id: "t6", title: "Construção do Campo Harmônico Maior", completed: false },
+      { id: "t7", title: "Pestanas & Acordes com Sétima (Maj7, m7, 7)", completed: false },
+      { id: "t8", title: "Introdução à Improvisação e Percepção Auditiva", completed: false },
+    ],
+  },
+  {
+    id: "mod-3",
+    title: "Módulo 3: Repertório & Expressão",
+    level: "Avançado",
+    topics: [
+      { id: "t9", title: "Repertório Solo & Técnicas Avançadas (Bend, Slide, Legato)", completed: false },
+      { id: "t10", title: "Modos Gregos (Jônio, Dórico, Miódio...)", completed: false },
+      { id: "t11", title: "Arranjos Próprios & Interpretação Musical", completed: false },
+    ],
+  },
+];
+

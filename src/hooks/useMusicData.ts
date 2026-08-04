@@ -178,3 +178,104 @@ export function useDeleteMutation(table: "students" | "lessons" | "materials" | 
     onSuccess: invalidate,
   });
 }
+
+// Sample initial transactions for demonstration
+const INITIAL_TRANSACTIONS = [
+  {
+    id: "tx-1",
+    student_name: "Lucas Mendes",
+    description: "Mensalidade Agosto - Violão",
+    amount: 320,
+    type: "receita" as const,
+    category: "mensalidade" as const,
+    status: "pago" as const,
+    payment_method: "pix" as const,
+    due_date: "2026-08-05",
+    paid_at: "2026-08-02",
+  },
+  {
+    id: "tx-2",
+    student_name: "Mariana Costa",
+    description: "Mensalidade Agosto - Piano",
+    amount: 380,
+    type: "receita" as const,
+    category: "mensalidade" as const,
+    status: "pago" as const,
+    payment_method: "pix" as const,
+    due_date: "2026-08-10",
+    paid_at: "2026-08-04",
+  },
+  {
+    id: "tx-3",
+    student_name: "Gabriel Santos",
+    description: "Pacote 4 Aulas - Guitarra",
+    amount: 400,
+    type: "receita" as const,
+    category: "pacote" as const,
+    status: "pendente" as const,
+    payment_method: "cartao" as const,
+    due_date: "2026-08-12",
+  },
+  {
+    id: "tx-4",
+    student_name: "Beatriz Lima",
+    description: "Mensalidade Julho - Canto (Atrasado)",
+    amount: 350,
+    type: "receita" as const,
+    category: "mensalidade" as const,
+    status: "atrasado" as const,
+    payment_method: "pix" as const,
+    due_date: "2026-07-28",
+  },
+  {
+    id: "tx-5",
+    description: "Manutenção de Instrumentos & Cabos",
+    amount: 150,
+    type: "despesa" as const,
+    category: "equipamento" as const,
+    status: "pago" as const,
+    payment_method: "pix" as const,
+    due_date: "2026-08-01",
+    paid_at: "2026-08-01",
+  },
+];
+
+export function useFinancialTransactions() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["financial-transactions", user?.id],
+    queryFn: () => {
+      const stored = localStorage.getItem("maestro_transactions");
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch {}
+      }
+      return INITIAL_TRANSACTIONS;
+    },
+  });
+}
+
+export function useAddFinancialTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (tx: Omit<typeof INITIAL_TRANSACTIONS[number], "id">) => {
+      const current = (() => {
+        const stored = localStorage.getItem("maestro_transactions");
+        if (stored) {
+          try { return JSON.parse(stored); } catch {}
+        }
+        return INITIAL_TRANSACTIONS;
+      })();
+
+      const newTx = { ...tx, id: `tx-${Date.now()}` };
+      const updated = [newTx, ...current];
+      localStorage.setItem("maestro_transactions", JSON.stringify(updated));
+      return newTx;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["financial-transactions"] });
+    },
+  });
+}
+

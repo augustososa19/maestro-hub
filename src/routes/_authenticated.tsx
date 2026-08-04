@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
+  BarChart3,
   BookOpen,
   CalendarDays,
+  DollarSign,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -35,9 +38,13 @@ const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/agenda", label: "Agenda", icon: CalendarDays },
   { to: "/alunos", label: "Alunos", icon: Users },
+  { to: "/evolucao", label: "Evolução", icon: GraduationCap },
   { to: "/biblioteca", label: "Biblioteca", icon: BookOpen },
+  { to: "/financeiro", label: "Financeiro", icon: DollarSign },
+  { to: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
+
 
 function AuthenticatedLayout() {
   const { user, loading, signOut } = useAuth();
