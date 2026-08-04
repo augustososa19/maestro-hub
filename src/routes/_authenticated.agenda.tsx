@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/agenda")({
       { property: "og:description", content: "Visualize e organize suas aulas por semana e por dia." },
     ],
   }),
-  component: Agenda;
+  component: Agenda,
 });
 
 function Agenda() {
