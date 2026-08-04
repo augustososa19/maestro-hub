@@ -90,9 +90,9 @@ function AuthenticatedLayout() {
           <Brand />
           <NavList onNavigate={() => undefined} />
           <UserBox
-            name={profile?.display_name ?? user.email ?? ""}
+            name={profile?.full_name ?? user.email ?? ""}
             email={user.email ?? ""}
-            photo={profile?.photo_url ?? undefined}
+            photo={profile?.avatar_url ?? undefined}
             onSignOut={signOut}
           />
         </aside>
@@ -109,9 +109,9 @@ function AuthenticatedLayout() {
                 <Brand />
                 <NavList onNavigate={() => setMobileNav(false)} />
                 <UserBox
-                  name={profile?.display_name ?? user.email ?? ""}
+                  name={profile?.full_name ?? user.email ?? ""}
                   email={user.email ?? ""}
-                  photo={profile?.photo_url ?? undefined}
+                  photo={profile?.avatar_url ?? undefined}
                   onSignOut={signOut}
                 />
               </SheetContent>
