@@ -128,7 +128,7 @@ export function isWithinAvailability(
 }
 
 export function toMinutes(time: string) {
-  const [h, m] = time.split(":");
+  const [h = "0", m = "0"] = time.split(":");
   return Number(h) * 60 + Number(m);
 }
 
