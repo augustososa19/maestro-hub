@@ -14,7 +14,301 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      availability: {
+        Row: {
+          created_at: string
+          end_time: string
+          id: string
+          start_time: string
+          teacher_id: string
+          weekday: number
+        }
+        Insert: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          start_time?: string
+          teacher_id: string
+          weekday: number
+        }
+        Update: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          start_time?: string
+          teacher_id?: string
+          weekday?: number
+        }
+        Relationships: []
+      }
+      blocked_dates: {
+        Row: {
+          created_at: string
+          end_date: string
+          id: string
+          reason: string | null
+          start_date: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date: string
+          id?: string
+          reason?: string | null
+          start_date: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string
+          id?: string
+          reason?: string | null
+          start_date?: string
+          teacher_id?: string
+        }
+        Relationships: []
+      }
+      lesson_reports: {
+        Row: {
+          content: string | null
+          created_at: string
+          exercises: string | null
+          id: string
+          lesson_id: string
+          notes: string | null
+          student_id: string | null
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          exercises?: string | null
+          id?: string
+          lesson_id: string
+          notes?: string | null
+          student_id?: string | null
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          exercises?: string | null
+          id?: string
+          lesson_id?: string
+          notes?: string | null
+          student_id?: string | null
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_reports_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: true
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_reports_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          created_at: string
+          duration_minutes: number
+          id: string
+          lesson_type: Database["public"]["Enums"]["lesson_type"]
+          location: string | null
+          notes: string | null
+          starts_at: string
+          status: Database["public"]["Enums"]["lesson_status"]
+          student_id: string | null
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          lesson_type?: Database["public"]["Enums"]["lesson_type"]
+          location?: string | null
+          notes?: string | null
+          starts_at: string
+          status?: Database["public"]["Enums"]["lesson_status"]
+          student_id?: string | null
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          lesson_type?: Database["public"]["Enums"]["lesson_type"]
+          location?: string | null
+          notes?: string | null
+          starts_at?: string
+          status?: Database["public"]["Enums"]["lesson_status"]
+          student_id?: string | null
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      materials: {
+        Row: {
+          created_at: string
+          id: string
+          kind: Database["public"]["Enums"]["material_kind"]
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string
+          student_id: string | null
+          teacher_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["material_kind"]
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path: string
+          student_id?: string | null
+          teacher_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: Database["public"]["Enums"]["material_kind"]
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+          student_id?: string | null
+          teacher_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "materials_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string
+          id: string
+          theme: string
+          timezone: string
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string
+          id: string
+          theme?: string
+          timezone?: string
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          theme?: string
+          timezone?: string
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      students: {
+        Row: {
+          created_at: string
+          default_duration: number
+          default_lesson_type: Database["public"]["Enums"]["lesson_type"]
+          default_location: string | null
+          default_time: string | null
+          default_weekday: number | null
+          email: string | null
+          goal: string | null
+          id: string
+          instrument: string
+          name: string
+          notes: string | null
+          photo_url: string | null
+          status: Database["public"]["Enums"]["student_status"]
+          teacher_id: string
+          updated_at: string
+          whatsapp: string | null
+        }
+        Insert: {
+          created_at?: string
+          default_duration?: number
+          default_lesson_type?: Database["public"]["Enums"]["lesson_type"]
+          default_location?: string | null
+          default_time?: string | null
+          default_weekday?: number | null
+          email?: string | null
+          goal?: string | null
+          id?: string
+          instrument?: string
+          name: string
+          notes?: string | null
+          photo_url?: string | null
+          status?: Database["public"]["Enums"]["student_status"]
+          teacher_id: string
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Update: {
+          created_at?: string
+          default_duration?: number
+          default_lesson_type?: Database["public"]["Enums"]["lesson_type"]
+          default_location?: string | null
+          default_time?: string | null
+          default_weekday?: number | null
+          email?: string | null
+          goal?: string | null
+          id?: string
+          instrument?: string
+          name?: string
+          notes?: string | null
+          photo_url?: string | null
+          status?: Database["public"]["Enums"]["student_status"]
+          teacher_id?: string
+          updated_at?: string
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +317,10 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      lesson_status: "agendada" | "realizada" | "cancelada" | "remarcada"
+      lesson_type: "presencial" | "online" | "experimental" | "reposicao"
+      material_kind: "pdf" | "imagem" | "video" | "audio" | "outro"
+      student_status: "ativo" | "pausado" | "inativo"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +447,11 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      lesson_status: ["agendada", "realizada", "cancelada", "remarcada"],
+      lesson_type: ["presencial", "online", "experimental", "reposicao"],
+      material_kind: ["pdf", "imagem", "video", "audio", "outro"],
+      student_status: ["ativo", "pausado", "inativo"],
+    },
   },
 } as const
