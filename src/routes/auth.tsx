@@ -138,7 +138,16 @@ function AuthPage() {
                 <Button type="submit" className="w-full" disabled={busy}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
                 </Button>
+                <button
+                  type="button"
+                  onClick={forgot}
+                  disabled={busy}
+                  className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
+                >
+                  Esqueci minha senha / definir senha
+                </button>
               </form>
+
             </TabsContent>
 
             <TabsContent value="criar">
