@@ -22,14 +22,21 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, StatusBadge } from "@/components/app/primitives";
 
 export const Route = createFileRoute("/_authenticated/alunos/$id")({
   head: () => ({
     meta: [
       { title: "Perfil do aluno · MusicCRM" },
-      { name: "description", content: "Dados, histórico de aulas, relatórios e materiais do aluno." },
+      {
+        name: "description",
+        content: "Dados, histórico de aulas, relatórios e materiais do aluno.",
+      },
       { property: "og:title", content: "Perfil do aluno · MusicCRM" },
-      { property: "og:description", content: "Dados, histórico de aulas, relatórios e materiais do aluno." },
+      {
+        property: "og:description",
+        content: "Dados, histórico de aulas, relatórios e materiais do aluno.",
+      },
     ],
   }),
   component: StudentDetail,
@@ -46,41 +53,50 @@ function StudentDetail() {
   if (isLoading) return <Skeleton className="h-64 w-full" />;
   if (!student) {
     return (
-      <div className="panel p-10 text-center">
-        <p className="text-sm text-muted-foreground">Aluno não encontrado.</p>
-        <Button variant="outline" size="sm" className="mt-3" asChild>
-          <Link to="/alunos">Voltar para alunos</Link>
-        </Button>
-      </div>
+      <EmptyState
+        illustration="search"
+        title="Aluno não encontrado"
+        description="O aluno pode ter sido removido."
+        action={
+          <Button variant="outline" size="sm" asChild>
+            <Link to="/alunos">Voltar para alunos</Link>
+          </Button>
+        }
+      />
     );
   }
 
   return (
-    <div className="space-y-5 animate-fade-up">
-      <Link to="/alunos" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-4 w-4" /> Alunos
+    <div className="space-y-4 animate-fade-up sm:space-y-5">
+      <Link
+        to="/alunos"
+        className="group inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-primary"
+      >
+        <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" /> Alunos
       </Link>
 
-      <header className="panel grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 p-5 sm:flex sm:items-center sm:justify-between">
+      <header className="panel grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 p-4 sm:flex sm:items-center sm:justify-between sm:p-5">
         <div className="flex min-w-0 items-center gap-4">
-          <Avatar className="h-16 w-16 shrink-0">
+          <Avatar className="h-16 w-16 shrink-0 ring-1 ring-border">
             <AvatarImage src={student.photo_url ?? undefined} alt={student.name} />
             <AvatarFallback>{initials(student.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <h1 className="truncate text-xl font-semibold tracking-tight">{student.name}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="truncate text-xl font-semibold tracking-tight">{student.name}</h1>
+              <StatusBadge value={student.status} label={labelOf(STUDENT_STATUS, student.status)} />
+            </div>
             <p className="truncate text-sm text-muted-foreground">
               {student.instrument}
               {student.goal ? ` · ${student.goal}` : ""}
             </p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Badge variant="secondary">{labelOf(STUDENT_STATUS, student.status)}</Badge>
-              {student.default_weekday !== null && (
+            {student.default_weekday !== null && (
+              <div className="mt-2">
                 <Badge variant="outline">
                   {WEEKDAYS[student.default_weekday]?.label} {student.default_time?.slice(0, 5)}
                 </Badge>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
@@ -99,19 +115,23 @@ function StudentDetail() {
             href={`https://wa.me/${student.whatsapp.replace(/\D/g, "")}`}
             target="_blank"
             rel="noreferrer"
-            className="panel flex min-w-0 items-center gap-3 p-4 text-sm hover:bg-accent/40"
+            className="panel panel-hover flex min-w-0 items-center gap-3 p-3.5 text-sm transition-colors hover:border-primary/25 hover:bg-accent/30"
           >
-            <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="truncate">{student.whatsapp}</span>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+              <Phone className="h-4 w-4" />
+            </span>
+            <span className="truncate font-medium">{student.whatsapp}</span>
           </a>
         )}
         {student.email && (
           <a
             href={`mailto:${student.email}`}
-            className="panel flex min-w-0 items-center gap-3 p-4 text-sm hover:bg-accent/40"
+            className="panel panel-hover flex min-w-0 items-center gap-3 p-3.5 text-sm transition-colors hover:border-primary/25 hover:bg-accent/30"
           >
-            <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="truncate">{student.email}</span>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+              <Mail className="h-4 w-4" />
+            </span>
+            <span className="truncate font-medium">{student.email}</span>
           </a>
         )}
       </div>
@@ -124,78 +144,106 @@ function StudentDetail() {
           <TabsTrigger value="notas">Notas</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="historico" className="mt-4 space-y-2">
-          {lessons.length === 0 && <EmptyPanel text="Nenhuma aula registrada ainda." />}
-          {lessons.map((lesson) => (
-            <div
-              key={lesson.id}
-              className="panel grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 text-sm"
-            >
-              <div className="min-w-0">
-                <p className="truncate font-medium">{formatDateTime(lesson.starts_at)}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {labelOf(LESSON_TYPES, lesson.lesson_type)} · {lesson.duration_minutes} min
-                </p>
+        <TabsContent value="historico" className="mt-3 space-y-2">
+          {lessons.length === 0 && (
+            <EmptyState
+              illustration="calendar"
+              title="Nenhuma aula registrada"
+              description="As aulas deste aluno aparecerão aqui."
+              className="py-8"
+            />
+          )}
+          <div className="stagger">
+            {lessons.map((lesson) => (
+              <div
+                key={lesson.id}
+                className="panel panel-hover mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 text-sm transition-colors hover:border-primary/25"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{formatDateTime(lesson.starts_at)}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {labelOf(LESSON_TYPES, lesson.lesson_type)} · {lesson.duration_minutes} min
+                  </p>
+                </div>
+                <StatusBadge
+                  value={lesson.status}
+                  label={labelOf(LESSON_STATUS, lesson.status)}
+                  className="shrink-0"
+                />
               </div>
-              <Badge variant={lesson.status === "realizada" ? "secondary" : "outline"} className="shrink-0">
-                {labelOf(LESSON_STATUS, lesson.status)}
-              </Badge>
-            </div>
-          ))}
+            ))}
+          </div>
         </TabsContent>
 
-        <TabsContent value="relatorios" className="mt-4 space-y-2">
-          {reports.length === 0 && <EmptyPanel text="Nenhum relatório salvo." />}
-          {reports.map((report) => (
-            <article key={report.id} className="panel space-y-2 p-4 text-sm">
-              <p className="text-xs text-muted-foreground">{formatDate(report.created_at)}</p>
-              {report.content && (
-                <p>
-                  <span className="font-medium">Conteúdo: </span>
-                  {report.content}
+        <TabsContent value="relatorios" className="mt-3 space-y-2">
+          {reports.length === 0 && (
+            <EmptyState
+              illustration="check"
+              title="Nenhum relatório salvo"
+              description="Relatórios de aula aparecerão aqui."
+              className="py-8"
+            />
+          )}
+          <div className="stagger">
+            {reports.map((report) => (
+              <article
+                key={report.id}
+                className="panel panel-hover mb-2 space-y-2 p-4 text-sm transition-colors hover:border-primary/25"
+              >
+                <p className="text-xs font-medium text-muted-foreground">
+                  {formatDate(report.created_at)}
                 </p>
-              )}
-              {report.exercises && (
-                <p>
-                  <span className="font-medium">Exercícios: </span>
-                  {report.exercises}
-                </p>
-              )}
-              {report.notes && <p className="text-muted-foreground">{report.notes}</p>}
-            </article>
-          ))}
+                {report.content && (
+                  <p>
+                    <span className="font-medium">Conteúdo: </span>
+                    {report.content}
+                  </p>
+                )}
+                {report.exercises && (
+                  <p>
+                    <span className="font-medium">Exercícios: </span>
+                    {report.exercises}
+                  </p>
+                )}
+                {report.notes && <p className="text-muted-foreground">{report.notes}</p>}
+              </article>
+            ))}
+          </div>
         </TabsContent>
 
-        <TabsContent value="materiais" className="mt-4 space-y-2">
-          {materials.length === 0 && <EmptyPanel text="Nenhum material vinculado a este aluno." />}
-          {materials.map((material) => (
-            <div
-              key={material.id}
-              className="panel grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 text-sm"
-            >
-              <span className="truncate">{material.title}</span>
-              <span className="shrink-0 text-xs text-muted-foreground">{formatBytes(material.size_bytes)}</span>
-            </div>
-          ))}
+        <TabsContent value="materiais" className="mt-3 space-y-2">
+          {materials.length === 0 && (
+            <EmptyState
+              illustration="folder"
+              title="Nenhum material vinculado"
+              description="Envie materiais na Biblioteca e vincule a este aluno."
+              className="py-8"
+            />
+          )}
+          <div className="stagger">
+            {materials.map((material) => (
+              <div
+                key={material.id}
+                className="panel panel-hover mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 text-sm transition-colors hover:border-primary/25"
+              >
+                <span className="truncate font-medium">{material.title}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {formatBytes(material.size_bytes)}
+                </span>
+              </div>
+            ))}
+          </div>
           <Button variant="outline" size="sm" asChild>
             <Link to="/biblioteca">Ir para a biblioteca</Link>
           </Button>
         </TabsContent>
 
-        <TabsContent value="notas" className="mt-4">
+        <TabsContent value="notas" className="mt-3">
           <div className="panel whitespace-pre-wrap p-4 text-sm">
             {student.notes || <span className="text-muted-foreground">Sem observações.</span>}
           </div>
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
-
-function EmptyPanel({ text }: { text: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-      {text}
     </div>
   );
 }

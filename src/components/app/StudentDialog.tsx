@@ -26,7 +26,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { uploadToMedia } from "@/lib/storage";
 
 const EMPTY = {
@@ -140,7 +146,7 @@ export function StudentDialog({
 
         <form onSubmit={save} className="space-y-5">
           <div className="flex items-center gap-4">
-            <Avatar className="h-16 w-16 shrink-0">
+            <Avatar className="h-16 w-16 shrink-0 ring-2 ring-border">
               <AvatarImage src={form.photo_url} alt={form.name} />
               <AvatarFallback>{initials(form.name || "?")}</AvatarFallback>
             </Avatar>
@@ -154,7 +160,11 @@ export function StudentDialog({
               />
               <Button type="button" variant="outline" size="sm" asChild disabled={uploading}>
                 <label htmlFor="photo" className="cursor-pointer">
-                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
                   Foto
                 </label>
               </Button>
@@ -165,7 +175,12 @@ export function StudentDialog({
           <section className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="nome">Nome</Label>
-              <Input id="nome" required value={form.name} onChange={(e) => set("name", e.target.value)} />
+              <Input
+                id="nome"
+                required
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="wa">WhatsApp</Label>
@@ -178,7 +193,12 @@ export function StudentDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="mail">E-mail (opcional)</Label>
-              <Input id="mail" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+              <Input
+                id="mail"
+                type="email"
+                value={form.email}
+                onChange={(e) => set("email", e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label>Instrumento</Label>
@@ -216,7 +236,12 @@ export function StudentDialog({
             </div>
             <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="notas">Observações</Label>
-              <Textarea id="notas" rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} />
+              <Textarea
+                id="notas"
+                rows={3}
+                value={form.notes}
+                onChange={(e) => set("notes", e.target.value)}
+              />
             </div>
           </section>
 
@@ -225,7 +250,10 @@ export function StudentDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Dia da semana</Label>
-                <Select value={form.default_weekday} onValueChange={(v) => set("default_weekday", v)}>
+                <Select
+                  value={form.default_weekday}
+                  onValueChange={(v) => set("default_weekday", v)}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
@@ -249,7 +277,10 @@ export function StudentDialog({
               </div>
               <div className="space-y-2">
                 <Label>Duração padrão</Label>
-                <Select value={form.default_duration} onValueChange={(v) => set("default_duration", v)}>
+                <Select
+                  value={form.default_duration}
+                  onValueChange={(v) => set("default_duration", v)}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -264,7 +295,10 @@ export function StudentDialog({
               </div>
               <div className="space-y-2">
                 <Label>Tipo da aula</Label>
-                <Select value={form.default_lesson_type} onValueChange={(v) => set("default_lesson_type", v)}>
+                <Select
+                  value={form.default_lesson_type}
+                  onValueChange={(v) => set("default_lesson_type", v)}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

@@ -45,7 +45,6 @@ const NAV = [
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
-
 function AuthenticatedLayout() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
@@ -105,10 +104,15 @@ function AuthenticatedLayout() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/85 px-4 backdrop-blur">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:gap-3">
             <Sheet open={mobileNav} onOpenChange={setMobileNav}>
               <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Abrir menu">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="press lg:hidden"
+                  aria-label="Abrir menu"
+                >
                   <Music4 className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
@@ -127,16 +131,16 @@ function AuthenticatedLayout() {
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-muted-foreground transition-colors hover:border-ring sm:max-w-sm"
+              className="press group flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-muted-foreground transition-colors hover:border-ring/70 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-sm"
             >
-              <Search className="h-4 w-4 shrink-0" />
+              <Search className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
               <span className="truncate">Buscar…</span>
-              <kbd className="ml-auto hidden shrink-0 rounded border border-border px-1.5 text-[10px] sm:block">
+              <kbd className="ml-auto hidden shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:block">
                 ⌘K
               </kbd>
             </button>
 
-            <div className="ml-auto flex shrink-0 items-center gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
               <ThemeToggle />
               <Button size="sm" onClick={() => setLessonDraft({})}>
                 <Plus className="h-4 w-4" />
@@ -145,7 +149,7 @@ function AuthenticatedLayout() {
             </div>
           </header>
 
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4 sm:px-6 lg:py-5">
             <Outlet />
           </main>
         </div>
@@ -161,11 +165,14 @@ function AuthenticatedLayout() {
 
 function Brand() {
   return (
-    <div className="flex h-14 items-center gap-2 border-b border-border px-5">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
+    <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-5">
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary text-primary-foreground shadow-sm transition-transform duration-200">
         <Music4 className="h-4 w-4" />
       </span>
-      <span className="truncate text-sm font-semibold tracking-tight">MusicCRM</span>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-semibold tracking-tight">MusicCRM</p>
+        <p className="truncate text-[11px] text-muted-foreground">Maestro Studio</p>
+      </div>
     </div>
   );
 }
@@ -173,7 +180,7 @@ function Brand() {
 function NavList({ onNavigate }: { onNavigate: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <nav className="flex-1 space-y-0.5 p-3">
+    <nav className="flex-1 space-y-0.5 overflow-y-auto p-2.5">
       {NAV.map((item) => {
         const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
         return (
@@ -182,13 +189,21 @@ function NavList({ onNavigate }: { onNavigate: () => void }) {
             to={item.to}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
+              "group relative flex items-center gap-2.5 overflow-hidden rounded-lg px-3 py-2 text-sm transition-all duration-200",
               active
-                ? "bg-accent font-medium text-accent-foreground"
+                ? "bg-accent font-medium text-accent-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
             )}
           >
-            <item.icon className="h-4 w-4 shrink-0" />
+            {active && (
+              <span className="absolute left-0 top-1/2 h-4 w-1 -translate-y-1/2 rounded-r-full bg-primary animate-fade-in" />
+            )}
+            <item.icon
+              className={cn(
+                "h-4 w-4 shrink-0 transition-transform duration-200 group-hover:scale-110",
+                active && "text-primary",
+              )}
+            />
             <span className="truncate">{item.label}</span>
           </Link>
         );
@@ -209,9 +224,9 @@ function UserBox({
   onSignOut: () => void;
 }) {
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-t border-border p-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <Avatar className="h-8 w-8 shrink-0">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-t border-border p-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <Avatar className="h-8 w-8 shrink-0 ring-1 ring-border">
           <AvatarImage src={photo} alt={name} />
           <AvatarFallback>{initials(name || email)}</AvatarFallback>
         </Avatar>
@@ -220,7 +235,13 @@ function UserBox({
           <p className="truncate text-xs text-muted-foreground">{email}</p>
         </div>
       </div>
-      <Button variant="ghost" size="icon" onClick={onSignOut} aria-label="Sair">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={onSignOut}
+        aria-label="Sair"
+        className="press shrink-0 text-muted-foreground hover:text-destructive"
+      >
         <LogOut className="h-4 w-4" />
       </Button>
     </div>
@@ -235,6 +256,7 @@ function ThemeToggle() {
       size="icon"
       aria-label="Alternar tema"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+      className="press"
     >
       <Sun className="h-4 w-4 dark:hidden" />
       <Moon className="hidden h-4 w-4 dark:block" />

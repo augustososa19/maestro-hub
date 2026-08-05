@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Download, FileText, Loader2, Search, Trash2, Upload } from "lucide-react";
+import { Download, Loader2, Search, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useInvalidateAll, useMaterials, useStudents } from "@/hooks/useMusicData";
@@ -10,8 +10,14 @@ import { formatBytes, materialKindOf } from "@/lib/domain";
 import { formatDate } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PageHeader, EmptyState, FileTypeIcon, type FileKind } from "@/components/app/primitives";
 
 export const Route = createFileRoute("/_authenticated/biblioteca")({
   head: () => ({
@@ -19,7 +25,10 @@ export const Route = createFileRoute("/_authenticated/biblioteca")({
       { title: "Biblioteca · MusicCRM" },
       { name: "description", content: "Partituras, PDFs, áudios e vídeos organizados por aluno." },
       { property: "og:title", content: "Biblioteca · MusicCRM" },
-      { property: "og:description", content: "Partituras, PDFs, áudios e vídeos organizados por aluno." },
+      {
+        property: "og:description",
+        content: "Partituras, PDFs, áudios e vídeos organizados por aluno.",
+      },
     ],
   }),
   component: Library,
@@ -82,24 +91,33 @@ function Library() {
   };
 
   return (
-    <div className="space-y-5 animate-fade-up">
-      <header className="min-w-0">
-        <h1 className="truncate text-2xl font-semibold tracking-tight">Biblioteca</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Materiais gerais ou vinculados a um aluno.</p>
-      </header>
+    <div className="space-y-4 animate-fade-up sm:space-y-5">
+      <PageHeader
+        title="Biblioteca"
+        description="Materiais gerais ou vinculados a um aluno."
+        actions={
+          <input
+            id="material"
+            type="file"
+            className="hidden"
+            onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
+          />
+        }
+      />
 
-      <div className="panel grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
-        <div className="relative min-w-0">
+      <div className="panel flex flex-col gap-3 p-3 sm:p-4 lg:flex-row lg:items-center">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar material"
             className="pl-9"
+            aria-label="Buscar material"
           />
         </div>
         <Select value={target} onValueChange={setTarget}>
-          <SelectTrigger className="sm:w-52">
+          <SelectTrigger className="lg:w-52">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -111,56 +129,87 @@ function Library() {
             ))}
           </SelectContent>
         </Select>
-        <input
-          id="material"
-          type="file"
-          className="hidden"
-          onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])}
-        />
         <Button asChild disabled={uploading} className="shrink-0">
           <label htmlFor="material" className="cursor-pointer">
-            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
             Enviar
           </label>
         </Button>
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="panel p-10 text-center text-sm text-muted-foreground">Nenhum material ainda.</div>
+      {materials.length === 0 ? (
+        <EmptyState
+          illustration="folder"
+          title="Sua biblioteca está vazia"
+          description="Envie PDFs, imagens, áudios e vídeos para centralizar partituras e materiais de estudo."
+          action={
+            <Button size="sm" onClick={() => document.getElementById("material")?.click()}>
+              <Upload className="h-4 w-4" /> Enviar material
+            </Button>
+          }
+        />
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          illustration="search"
+          title="Nenhum material encontrado"
+          description="Tente buscar por outro termo."
+          action={
+            <Button variant="outline" size="sm" onClick={() => setQuery("")}>
+              Limpar busca
+            </Button>
+          }
+        />
       ) : (
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((material) => (
-            <li key={material.id} className="panel grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground">
-                <FileText className="h-4 w-4" />
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{material.title}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {formatBytes(material.size_bytes)} · {formatDate(material.created_at)}
-                </p>
-                <Badge variant="outline" className="mt-1 text-[10px]">
-                  {students.find((s) => s.id === material.student_id)?.name ?? "Geral"}
-                </Badge>
-              </div>
-              <div className="flex shrink-0 flex-col">
-                <Button variant="ghost" size="icon" aria-label="Abrir" onClick={() => open(material.storage_path)}>
-                  <Download className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Remover"
-                  className="text-destructive"
-                  onClick={() => remove(material.id, material.storage_path)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </li>
-          ))}
+        <ul className="stagger grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((material) => {
+            const kind = (material.kind ?? "outro") as FileKind;
+            const student = students.find((s) => s.id === material.student_id);
+            return (
+              <li
+                key={material.id}
+                className="panel panel-hover group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-3.5 transition-all duration-200 hover:shadow-panel"
+              >
+                <FileTypeIcon kind={kind} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium leading-tight">{material.title}</p>
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {formatBytes(material.size_bytes)} · {formatDate(material.created_at)}
+                  </p>
+                  <span className={cnKindBadge(student)}>{student?.name ?? "Geral"}</span>
+                </div>
+                <div className="flex shrink-0 flex-col gap-0.5">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Abrir"
+                    onClick={() => open(material.storage_path)}
+                    className="press h-8 w-8 text-muted-foreground hover:text-primary"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Remover"
+                    className="press h-8 w-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => remove(material.id, material.storage_path)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
   );
+}
+
+function cnKindBadge(student: { name: string } | undefined) {
+  return `mt-1.5 inline-flex max-w-full items-center rounded-full border border-border bg-surface px-2 py-0.5 text-[11px] font-medium text-muted-foreground truncate`;
 }
