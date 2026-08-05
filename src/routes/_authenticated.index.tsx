@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
+  Bell,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { useLessons, useStudents } from "@/hooks/useMusicData";
 import { useShell } from "@/components/app/shell-context";
+import { RemindersPanel } from "@/components/app/RemindersPanel";
 import { formatTime, formatWeekdayLong, relative } from "@/lib/dates";
 import { initials, labelOf, LESSON_TYPES, type LessonWithStudent } from "@/lib/domain";
 import { Button } from "@/components/ui/button";
@@ -84,6 +86,21 @@ function Dashboard() {
           icon={CheckCircle2}
           tone="muted"
         />
+      </section>
+
+      <section className="panel p-4 sm:p-5">
+        <div className="mb-3 flex items-center gap-2">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+            <Bell className="h-4 w-4" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold">Lembretes do dia</h2>
+            <p className="truncate text-xs text-muted-foreground">
+              Aulas iminentes e mensalidades em aberto.
+            </p>
+          </div>
+        </div>
+        <RemindersPanel limit={4} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">

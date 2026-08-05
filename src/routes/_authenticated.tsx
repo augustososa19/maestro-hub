@@ -25,6 +25,7 @@ import { LessonDialog, type LessonDraft } from "@/components/app/LessonDialog";
 import { StudentDialog } from "@/components/app/StudentDialog";
 import { ReportDialog } from "@/components/app/ReportDialog";
 import { GlobalSearch } from "@/components/app/GlobalSearch";
+import { ReminderBell } from "@/components/app/ReminderBell";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -141,6 +142,7 @@ function AuthenticatedLayout() {
             </button>
 
             <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
+              <ReminderBell />
               <ThemeToggle />
               <Button size="sm" onClick={() => setLessonDraft({})}>
                 <Plus className="h-4 w-4" />
