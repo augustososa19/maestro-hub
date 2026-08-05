@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Upload, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { uploadToMedia } from "@/lib/storage";
 import {
   useAvailability,
   useBlockedDates,
@@ -17,6 +18,7 @@ import { PageHeader } from "@/components/app/primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -53,6 +55,8 @@ function SettingsPage() {
 
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [uploading, setUploading] = useState(false);
   const [slot, setSlot] = useState({ weekday: "1", start: "08:00", end: "18:00" });
   const [block, setBlock] = useState({ start: "", end: "", reason: "" });
 
@@ -60,14 +64,28 @@ function SettingsPage() {
     if (!profile) return;
     setName(profile.full_name ?? "");
     setWhatsapp(profile.whatsapp ?? "");
+    setAvatarUrl(profile.avatar_url ?? "");
   }, [profile]);
+
+  const pickPhoto = async (file: File) => {
+    if (!user) return;
+    setUploading(true);
+    try {
+      const { signedUrl } = await uploadToMedia(file, user.id, "perfil");
+      setAvatarUrl(signedUrl);
+    } catch {
+      toast.error("Não foi possível enviar a foto.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const saveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     const { error } = await supabase
       .from("profiles")
-      .update({ full_name: name, whatsapp: whatsapp || null })
+      .update({ full_name: name, whatsapp: whatsapp || null, avatar_url: avatarUrl || null })
       .eq("id", user.id);
     if (error) {
       toast.error(error.message);
@@ -122,6 +140,32 @@ function SettingsPage() {
       <section className="panel space-y-4 p-4 sm:p-5">
         <h2 className="text-sm font-semibold">Perfil</h2>
         <form onSubmit={saveProfile} className="grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center gap-4 sm:col-span-2">
+            <Avatar className="h-16 w-16 shrink-0 ring-2 ring-border">
+              <AvatarImage src={avatarUrl} alt={name} />
+              <AvatarFallback className="text-sm">{initials(name || "?")}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <input
+                id="foto-prof"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => e.target.files?.[0] && pickPhoto(e.target.files[0])}
+              />
+              <Button type="button" variant="outline" size="sm" asChild disabled={uploading}>
+                <label htmlFor="foto-prof" className="cursor-pointer">
+                  {uploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  Foto
+                </label>
+              </Button>
+              <p className="mt-1 text-xs text-muted-foreground">JPG ou PNG.</p>
+            </div>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="nome-prof">Nome</Label>
             <Input id="nome-prof" value={name} onChange={(e) => setName(e.target.value)} />
@@ -289,5 +333,16 @@ function SettingsPage() {
         </Select>
       </section>
     </div>
+  );
+}
+
+function initials(value: string) {
+  return (
+    value
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0]?.toUpperCase())
+      .join("") || "?"
   );
 }

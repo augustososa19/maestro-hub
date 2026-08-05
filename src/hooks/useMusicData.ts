@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type {
   Availability,
   BlockedDate,
+  FinancialTransaction,
   Lesson,
   LessonReport,
   LessonWithStudent,
@@ -20,7 +21,11 @@ export function useProfile() {
     queryKey: ["profile", user?.id],
     enabled: !!user,
     queryFn: async (): Promise<Profile | null> => {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", user!.id).maybeSingle();
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user!.id)
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -46,7 +51,11 @@ export function useStudent(id: string) {
     queryKey: ["student", id, user?.id],
     enabled: !!user && !!id,
     queryFn: async (): Promise<Student | null> => {
-      const { data, error } = await supabase.from("students").select("*").eq("id", id).maybeSingle();
+      const { data, error } = await supabase
+        .from("students")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -61,7 +70,9 @@ export function useLessons(range?: { from: Date; to: Date }) {
     queryFn: async (): Promise<LessonWithStudent[]> => {
       let query = supabase.from("lessons").select(LESSON_SELECT).order("starts_at");
       if (range) {
-        query = query.gte("starts_at", range.from.toISOString()).lt("starts_at", range.to.toISOString());
+        query = query
+          .gte("starts_at", range.from.toISOString())
+          .lt("starts_at", range.to.toISOString());
       }
       const { data, error } = await query;
       if (error) throw error;
@@ -168,7 +179,9 @@ export function useInvalidateAll() {
   };
 }
 
-export function useDeleteMutation(table: "students" | "lessons" | "materials" | "availability" | "blocked_dates") {
+export function useDeleteMutation(
+  table: "students" | "lessons" | "materials" | "availability" | "blocked_dates",
+) {
   const invalidate = useInvalidateAll();
   return useMutation({
     mutationFn: async (id: string) => {
@@ -240,33 +253,28 @@ const INITIAL_TRANSACTIONS = [
   },
 ];
 
+function readTransactions() {
+  const stored = localStorage.getItem("maestro_transactions");
+  if (!stored) return INITIAL_TRANSACTIONS;
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return INITIAL_TRANSACTIONS;
+  }
+}
 export function useFinancialTransactions() {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["financial-transactions", user?.id],
-    queryFn: () => {
-      const stored = localStorage.getItem("maestro_transactions");
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch {}
-      }
-      return INITIAL_TRANSACTIONS;
-    },
+    queryFn: () => readTransactions(),
   });
 }
 
 export function useAddFinancialTransaction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (tx: Omit<typeof INITIAL_TRANSACTIONS[number], "id">) => {
-      const current = (() => {
-        const stored = localStorage.getItem("maestro_transactions");
-        if (stored) {
-          try { return JSON.parse(stored); } catch {}
-        }
-        return INITIAL_TRANSACTIONS;
-      })();
+    mutationFn: async (tx: Omit<FinancialTransaction, "id">) => {
+      const current = readTransactions();
 
       const newTx = { ...tx, id: `tx-${Date.now()}` };
       const updated = [newTx, ...current];
@@ -279,3 +287,32 @@ export function useAddFinancialTransaction() {
   });
 }
 
+export function useUpdateFinancialTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (tx: { id: string; status?: string; paid_at?: string | null }) => {
+      const current = readTransactions();
+      const updated = current.map((t: { id: string }) => (t.id === tx.id ? { ...t, ...tx } : t));
+      localStorage.setItem("maestro_transactions", JSON.stringify(updated));
+      return updated;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["financial-transactions"] });
+    },
+  });
+}
+
+export function useDeleteFinancialTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const current = readTransactions();
+      const updated = current.filter((t: { id: string }) => t.id !== id);
+      localStorage.setItem("maestro_transactions", JSON.stringify(updated));
+      return updated;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["financial-transactions"] });
+    },
+  });
+}

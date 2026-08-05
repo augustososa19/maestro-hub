@@ -10,11 +10,16 @@ import {
   Receipt,
   TrendingUp,
   AlertTriangle,
+  Check,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   useAddFinancialTransaction,
   useFinancialTransactions,
+  useUpdateFinancialTransaction,
+  useDeleteFinancialTransaction,
   useStudents,
 } from "@/hooks/useMusicData";
 import type { FinancialTransaction } from "@/lib/domain";
@@ -47,11 +52,30 @@ function FinanceiroPage() {
   const { data: transactions = [] } = useFinancialTransactions();
   const { data: students = [] } = useStudents();
   const addTransaction = useAddFinancialTransaction();
+  const updateTransaction = useUpdateFinancialTransaction();
+  const deleteTransaction = useDeleteFinancialTransaction();
 
   const [filterStatus, setFilterStatus] = useState<"todos" | "pago" | "pendente" | "atrasado">(
     "todos",
   );
   const [openModal, setOpenModal] = useState(false);
+
+  const markAsPaid = (tx: FinancialTransaction) => {
+    updateTransaction.mutate(
+      { id: tx.id, status: "pago", paid_at: new Date().toISOString() },
+      {
+        onSuccess: () => toast.success("Lançamento marcado como pago."),
+        onError: () => toast.error("Não foi possível atualizar o lançamento."),
+      },
+    );
+  };
+
+  const removeTransaction = (tx: FinancialTransaction) => {
+    deleteTransaction.mutate(tx.id, {
+      onSuccess: () => toast.success("Lançamento excluído."),
+      onError: () => toast.error("Não foi possível excluir o lançamento."),
+    });
+  };
 
   // Form states
   const [description, setDescription] = useState("");
@@ -101,8 +125,8 @@ function FinanceiroPage() {
       type,
       category,
       payment_method: paymentMethod,
-      student_name: studentName || undefined,
-      due_date: dueDate || new Date().toISOString().split("T")[0],
+      student_name: studentName || null,
+      due_date: dueDate || new Date().toISOString().slice(0, 10),
       status: "pendente",
     });
 
@@ -187,6 +211,7 @@ function FinanceiroPage() {
                   <th className="pb-2.5 pr-3 font-semibold">Vencimento</th>
                   <th className="pb-2.5 pr-3 font-semibold">Valor</th>
                   <th className="pb-2.5 font-semibold">Status</th>
+                  <th className="pb-2.5 pl-3 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -211,6 +236,38 @@ function FinanceiroPage() {
                     </td>
                     <td className="py-3">
                       <StatusBadge value={tx.status} label={tx.status} />
+                    </td>
+                    <td className="py-3 pl-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {tx.status !== "pago" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="press h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
+                            title="Marcar como pago"
+                            aria-label="Marcar como pago"
+                            disabled={updateTransaction.isPending}
+                            onClick={() => markAsPaid(tx)}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="press h-8 w-8 rounded-md text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500"
+                          title="Excluir lançamento"
+                          aria-label="Excluir lançamento"
+                          disabled={deleteTransaction.isPending}
+                          onClick={() => removeTransaction(tx)}
+                        >
+                          {deleteTransaction.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}

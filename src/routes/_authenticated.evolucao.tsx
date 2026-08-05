@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   Award,
@@ -11,13 +11,15 @@ import {
   Sparkles,
   Trophy,
 } from "lucide-react";
-import { DEFAULT_CURRICULUM_MODULES } from "@/lib/domain";
+import { DEFAULT_CURRICULUM_MODULES, type CurriculumModule } from "@/lib/domain";
 import { useStudentReports, useStudents } from "@/hooks/useMusicData";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PageHeader, EmptyState, StatusBadge } from "@/components/app/primitives";
 import { cn } from "@/lib/utils";
+
+const STORAGE_PREFIX = "maestro_curriculum_";
 
 export const Route = createFileRoute("/_authenticated/evolucao")({
   head: () => ({
@@ -66,7 +68,34 @@ function EvolucaoPage() {
   const selectedStudent = students.find((s) => s.id === selectedStudentId) || students[0];
 
   const { data: reports = [] } = useStudentReports(selectedStudent?.id ?? "");
-  const [modules, setModules] = useState(DEFAULT_CURRICULUM_MODULES);
+  const [modules, setModules] = useState<CurriculumModule[]>(DEFAULT_CURRICULUM_MODULES);
+
+  const loadModules = (studentId: string): CurriculumModule[] => {
+    if (!studentId) return DEFAULT_CURRICULUM_MODULES;
+    try {
+      const raw = localStorage.getItem(STORAGE_PREFIX + studentId);
+      if (!raw) return DEFAULT_CURRICULUM_MODULES;
+      const saved = JSON.parse(raw) as CurriculumModule[];
+      if (!Array.isArray(saved) || saved.length === 0) return DEFAULT_CURRICULUM_MODULES;
+      return saved;
+    } catch {
+      return DEFAULT_CURRICULUM_MODULES;
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedStudentId) return;
+    setModules(loadModules(selectedStudentId));
+  }, [selectedStudentId]);
+
+  useEffect(() => {
+    if (!selectedStudentId) return;
+    try {
+      localStorage.setItem(STORAGE_PREFIX + selectedStudentId, JSON.stringify(modules));
+    } catch {
+      void 0;
+    }
+  }, [modules, selectedStudentId]);
 
   const toggleTopic = (modId: string, topicId: string) => {
     setModules((prev) =>

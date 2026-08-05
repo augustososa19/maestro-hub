@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useAvailability, useBlockedDates, useInvalidateAll, useStudents } from "@/hooks/useMusicData";
+import {
+  useAvailability,
+  useBlockedDates,
+  useInvalidateAll,
+  useStudents,
+} from "@/hooks/useMusicData";
 import {
   DURATIONS,
   LESSON_TYPES,
@@ -26,7 +31,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export type LessonDraft = {
   lesson?: LessonWithStudent | null;
@@ -48,7 +59,8 @@ export function LessonDialog({
   const { data: availability = [] } = useAvailability();
   const { data: blocks = [] } = useBlockedDates();
 
-  const editing = !!draft?.lesson && !draft.duplicate;
+  const [duplicating, setDuplicating] = useState(false);
+  const editing = !!draft?.lesson && !draft.duplicate && !duplicating;
   const [saving, setSaving] = useState(false);
   const [studentId, setStudentId] = useState("");
   const [date, setDate] = useState("");
@@ -81,6 +93,7 @@ export function LessonDialog({
     setShowNewStudent(false);
     setNewStudentName("");
     setNewStudentWhatsapp("");
+    setDuplicating(!!draft.duplicate);
   }, [draft]);
 
   const student = useMemo(() => students.find((s) => s.id === studentId), [students, studentId]);
@@ -94,7 +107,12 @@ export function LessonDialog({
 
   const availabilityCheck = useMemo(() => {
     if (!date || !time) return { ok: true } as const;
-    return isWithinAvailability(fromDateTimeInput(date, time), Number(duration), availability, blocks);
+    return isWithinAvailability(
+      fromDateTimeInput(date, time),
+      Number(duration),
+      availability,
+      blocks,
+    );
   }, [date, time, duration, availability, blocks]);
 
   const createStudent = async (e: React.FormEvent) => {
@@ -150,7 +168,7 @@ export function LessonDialog({
       starts_at: fromDateTimeInput(date, time).toISOString(),
       duration_minutes: Number(duration),
       lesson_type: type as never,
-      status: status as never,
+      status: "agendada" as never,
       location: location || null,
       notes: notes || null,
     };
@@ -160,10 +178,14 @@ export function LessonDialog({
     const { error } = await query;
     setSaving(false);
     if (error) {
-      toast.error(error.message.includes("Conflito") ? "Conflito de horário com outra aula." : error.message);
+      toast.error(
+        error.message.includes("Conflito") ? "Conflito de horário com outra aula." : error.message,
+      );
       return;
     }
-    toast.success(editing ? "Aula atualizada." : "Aula agendada.");
+    toast.success(
+      duplicating ? "Aula duplicada." : editing ? "Aula atualizada." : "Aula agendada.",
+    );
     invalidate();
     onOpenChange(false);
   };
@@ -184,9 +206,15 @@ export function LessonDialog({
     <Dialog open={!!draft} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{editing ? "Editar aula" : "Nova aula"}</DialogTitle>
+          <DialogTitle>
+            {duplicating ? "Duplicar aula" : editing ? "Editar aula" : "Nova aula"}
+          </DialogTitle>
           <DialogDescription>
-            {editing ? "Altere, remarque ou cancele esta aula." : "Agende dentro dos seus horários disponíveis."}
+            {duplicating
+              ? "Crie uma nova aula a partir desta, ajustando o que precisar."
+              : editing
+                ? "Altere, remarque ou cancele esta aula."
+                : "Agende dentro dos seus horários disponíveis."}
           </DialogDescription>
         </DialogHeader>
 
@@ -210,7 +238,9 @@ export function LessonDialog({
                 <p className="text-xs font-semibold text-primary">Cadastro rápido de aluno</p>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <div className="space-y-1 sm:col-span-2">
-                    <Label htmlFor="ns-nome" className="text-xs">Nome *</Label>
+                    <Label htmlFor="ns-nome" className="text-xs">
+                      Nome *
+                    </Label>
                     <Input
                       id="ns-nome"
                       placeholder="Nome completo"
@@ -221,7 +251,9 @@ export function LessonDialog({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="ns-wa" className="text-xs">WhatsApp</Label>
+                    <Label htmlFor="ns-wa" className="text-xs">
+                      WhatsApp
+                    </Label>
                     <Input
                       id="ns-wa"
                       placeholder="(11) 99999-0000"
@@ -230,15 +262,32 @@ export function LessonDialog({
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="ns-inst" className="text-xs">Instrumento</Label>
+                    <Label htmlFor="ns-inst" className="text-xs">
+                      Instrumento
+                    </Label>
                     <select
                       id="ns-inst"
                       value={newStudentInstrument}
                       onChange={(e) => setNewStudentInstrument(e.target.value)}
                       className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      {["Violão", "Guitarra", "Piano", "Teclado", "Baixo", "Bateria", "Canto", "Violino", "Saxofone", "Flauta", "Ukulele", "Outro"].map((i) => (
-                        <option key={i} value={i}>{i}</option>
+                      {[
+                        "Violão",
+                        "Guitarra",
+                        "Piano",
+                        "Teclado",
+                        "Baixo",
+                        "Bateria",
+                        "Canto",
+                        "Violino",
+                        "Saxofone",
+                        "Flauta",
+                        "Ukulele",
+                        "Outro",
+                      ].map((i) => (
+                        <option key={i} value={i}>
+                          {i}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -250,13 +299,23 @@ export function LessonDialog({
                   disabled={savingStudent || !newStudentName.trim()}
                   onClick={createStudent}
                 >
-                  {savingStudent ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar e selecionar aluno"}
+                  {savingStudent ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Salvar e selecionar aluno"
+                  )}
                 </Button>
               </div>
             ) : (
               <Select value={studentId} onValueChange={setStudentId}>
                 <SelectTrigger>
-                  <SelectValue placeholder={students.length === 0 ? "Nenhum aluno — clique em + Novo aluno" : "Selecione o aluno"} />
+                  <SelectValue
+                    placeholder={
+                      students.length === 0
+                        ? "Nenhum aluno — clique em + Novo aluno"
+                        : "Selecione o aluno"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   {students.map((s) => (
@@ -273,11 +332,23 @@ export function LessonDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="date">Data</Label>
-              <Input id="date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+              <Input
+                id="date"
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="time">Horário</Label>
-              <Input id="time" type="time" required value={time} onChange={(e) => setTime(e.target.value)} />
+              <Input
+                id="time"
+                type="time"
+                required
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
             </div>
           </div>
 
@@ -348,25 +419,60 @@ export function LessonDialog({
           </div>
 
           {!availabilityCheck.ok && availabilityCheck.reason && (
-            <p className={`rounded-md px-3 py-2 text-xs ${
-              availabilityCheck.reason.startsWith("Dia bloqueado")
-                ? "bg-destructive/10 text-destructive"
-                : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
-            }`}>
-              {availabilityCheck.reason.startsWith("Dia bloqueado") ? "🚫" : "⚠️"} {availabilityCheck.reason}
+            <p
+              className={`rounded-md px-3 py-2 text-xs ${
+                availabilityCheck.reason.startsWith("Dia bloqueado")
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+              }`}
+            >
+              {availabilityCheck.reason.startsWith("Dia bloqueado") ? "🚫" : "⚠️"}{" "}
+              {availabilityCheck.reason}
             </p>
           )}
 
           <DialogFooter className="gap-2 sm:justify-between">
             {editing ? (
-              <Button type="button" variant="ghost" onClick={remove} className="text-destructive">
-                <Trash2 className="h-4 w-4" /> Excluir
+              <>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setDuplicating(true);
+                      setStatus("agendada");
+                    }}
+                    className="text-foreground"
+                  >
+                    <Copy className="h-4 w-4" /> Duplicar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={remove}
+                    className="text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" /> Excluir
+                  </Button>
+                </div>
+              </>
+            ) : duplicating ? (
+              <Button type="button" variant="ghost" onClick={() => setDuplicating(false)}>
+                ← Voltar
               </Button>
             ) : (
               <span />
             )}
             <Button type="submit" disabled={saving || showNewStudent}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : editing ? "Salvar" : "Agendar"}
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : duplicating ? (
+                "Criar cópia"
+              ) : editing ? (
+                "Salvar"
+              ) : (
+                "Agendar"
+              )}
             </Button>
           </DialogFooter>
         </form>

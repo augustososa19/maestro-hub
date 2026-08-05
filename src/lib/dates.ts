@@ -1,4 +1,14 @@
-import { format, formatDistanceToNowStrict, isSameDay, startOfWeek, addDays } from "date-fns";
+import {
+  addDays,
+  endOfMonth,
+  endOfWeek,
+  format,
+  formatDistanceToNowStrict,
+  isSameDay,
+  isSameMonth,
+  startOfMonth,
+  startOfWeek,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const opts = { locale: ptBR } as const;
@@ -36,4 +46,17 @@ export function weekDays(date: Date) {
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
 }
 
-export { isSameDay, addDays };
+/** Grade completa de um mês (preenchendo início/fim de semana) para a visão mês. */
+export function monthGrid(date: Date) {
+  const first = startOfWeek(startOfMonth(date), { weekStartsOn: 0 });
+  const last = endOfWeek(endOfMonth(date), { weekStartsOn: 0 });
+  const days: Date[] = [];
+  let cursor = first;
+  while (cursor <= last) {
+    days.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return days;
+}
+
+export { isSameDay, isSameMonth, addDays, startOfMonth, endOfMonth };
