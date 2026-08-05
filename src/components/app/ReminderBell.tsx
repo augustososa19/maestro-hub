@@ -27,7 +27,7 @@ export function ReminderBell() {
           variant="ghost"
           size="icon"
           aria-label={`Lembretes (${count})`}
-          className="press relative"
+          className="press relative h-10 w-10"
         >
           <Bell className="h-4 w-4" />
           {count > 0 && (

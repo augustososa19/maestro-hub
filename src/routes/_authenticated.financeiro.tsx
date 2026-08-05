@@ -119,22 +119,32 @@ function FinanceiroPage() {
       return;
     }
 
-    addTransaction.mutate({
-      description,
-      amount: parseFloat(amount),
-      type,
-      category,
-      payment_method: paymentMethod,
-      student_name: studentName || null,
-      due_date: dueDate || new Date().toISOString().slice(0, 10),
-      status: "pendente",
-    });
+    const toastId = toast.loading("Salvando lançamento...");
 
-    toast.success("Lançamento adicionado com sucesso!");
-    setOpenModal(false);
-    setDescription("");
-    setAmount("");
-    setStudentName("");
+    addTransaction.mutate(
+      {
+        description,
+        amount: parseFloat(amount),
+        type,
+        category,
+        payment_method: paymentMethod,
+        student_name: studentName || null,
+        due_date: dueDate || new Date().toISOString().slice(0, 10),
+        status: "pendente",
+      },
+      {
+        onSuccess: () => {
+          toast.success("Lançamento adicionado com sucesso!", { id: toastId });
+          setOpenModal(false);
+          setDescription("");
+          setAmount("");
+          setStudentName("");
+        },
+        onError: () => {
+          toast.error("Não foi possível adicionar o lançamento.", { id: toastId });
+        },
+      },
+    );
   };
 
   return (
@@ -150,7 +160,7 @@ function FinanceiroPage() {
       />
 
       {/* Cards Financeiros */}
-      <section className="stagger grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="stagger grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Receita Recebida"
           value={formatMoney(totalReceitaRecebida)}
@@ -193,7 +203,7 @@ function FinanceiroPage() {
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4">
           {filteredTransactions.length === 0 ? (
             <EmptyState
               illustration="check"
@@ -202,77 +212,151 @@ function FinanceiroPage() {
               className="py-8"
             />
           ) : (
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="pb-2.5 pr-3 font-semibold">Descrição</th>
-                  <th className="pb-2.5 pr-3 font-semibold">Aluno / Origem</th>
-                  <th className="pb-2.5 pr-3 font-semibold">Categoria</th>
-                  <th className="pb-2.5 pr-3 font-semibold">Vencimento</th>
-                  <th className="pb-2.5 pr-3 font-semibold">Valor</th>
-                  <th className="pb-2.5 font-semibold">Status</th>
-                  <th className="pb-2.5 pl-3 text-right font-semibold">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+            <>
+              <div className="grid gap-3 md:hidden">
                 {filteredTransactions.map((tx) => (
-                  <tr key={tx.id} className="transition-colors hover:bg-accent/40">
-                    <td className="py-3 pr-3 font-medium">{tx.description}</td>
-                    <td className="py-3 pr-3 text-muted-foreground">{tx.student_name || "—"}</td>
-                    <td className="py-3 pr-3 text-xs capitalize">
-                      {tx.category.replace("_", " ")}
-                    </td>
-                    <td className="py-3 pr-3 text-xs text-muted-foreground tabular-nums">
-                      {new Date(tx.due_date).toLocaleDateString("pt-BR")}
-                    </td>
-                    <td
-                      className={`py-3 pr-3 font-semibold tabular-nums ${
-                        tx.type === "receita"
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : "text-rose-500"
-                      }`}
-                    >
-                      {tx.type === "receita" ? "+" : "-"} {formatMoney(tx.amount)}
-                    </td>
-                    <td className="py-3">
-                      <StatusBadge value={tx.status} label={tx.status} />
-                    </td>
-                    <td className="py-3 pl-3">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {tx.status !== "pago" && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="press h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
-                            title="Marcar como pago"
-                            aria-label="Marcar como pago"
-                            disabled={updateTransaction.isPending}
-                            onClick={() => markAsPaid(tx)}
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="press h-8 w-8 rounded-md text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500"
-                          title="Excluir lançamento"
-                          aria-label="Excluir lançamento"
-                          disabled={deleteTransaction.isPending}
-                          onClick={() => removeTransaction(tx)}
-                        >
-                          {deleteTransaction.isPending ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
+                  <article
+                    key={tx.id}
+                    className="rounded-xl border border-border bg-background/50 p-4"
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-sm font-semibold">{tx.description}</h3>
+                        <p className="mt-1 break-words text-xs text-muted-foreground">
+                          {tx.student_name || "Sem aluno vinculado"}
+                        </p>
                       </div>
-                    </td>
-                  </tr>
+                      <StatusBadge value={tx.status} label={tx.status} />
+                    </div>
+
+                    <dl className="mt-4 grid grid-cols-1 gap-x-3 gap-y-3 text-xs min-[360px]:grid-cols-2">
+                      <div>
+                        <dt className="text-muted-foreground">Vencimento</dt>
+                        <dd className="mt-1 font-medium tabular-nums">
+                          {new Date(tx.due_date).toLocaleDateString("pt-BR")}
+                        </dd>
+                      </div>
+                      <div className="min-[360px]:text-right">
+                        <dt className="text-muted-foreground">Valor</dt>
+                        <dd
+                          className={`mt-1 font-semibold tabular-nums ${
+                            tx.type === "receita"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-500"
+                          }`}
+                        >
+                          {tx.type === "receita" ? "+" : "-"} {formatMoney(tx.amount)}
+                        </dd>
+                      </div>
+                    </dl>
+
+                    <div className="mt-4 flex flex-col gap-2 border-t border-border pt-3 min-[360px]:flex-row">
+                      {tx.status !== "pago" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="press flex-1 text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
+                          disabled={updateTransaction.isPending}
+                          onClick={() => markAsPaid(tx)}
+                        >
+                          <Check className="h-4 w-4" /> Marcar pago
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="press flex-1 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500"
+                        disabled={deleteTransaction.isPending}
+                        onClick={() => removeTransaction(tx)}
+                      >
+                        {deleteTransaction.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                        Excluir
+                      </Button>
+                    </div>
+                  </article>
                 ))}
-              </tbody>
-            </table>
+              </div>
+
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+                    <tr>
+                      <th className="pb-2.5 pr-3 font-semibold">Descrição</th>
+                      <th className="pb-2.5 pr-3 font-semibold">Aluno / Origem</th>
+                      <th className="pb-2.5 pr-3 font-semibold">Categoria</th>
+                      <th className="pb-2.5 pr-3 font-semibold">Vencimento</th>
+                      <th className="pb-2.5 pr-3 font-semibold">Valor</th>
+                      <th className="pb-2.5 font-semibold">Status</th>
+                      <th className="pb-2.5 pl-3 text-right font-semibold">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredTransactions.map((tx) => (
+                      <tr key={tx.id} className="transition-colors hover:bg-accent/40">
+                        <td className="py-3 pr-3 font-medium">{tx.description}</td>
+                        <td className="py-3 pr-3 text-muted-foreground">
+                          {tx.student_name || "—"}
+                        </td>
+                        <td className="py-3 pr-3 text-xs capitalize">
+                          {tx.category.replace("_", " ")}
+                        </td>
+                        <td className="py-3 pr-3 text-xs text-muted-foreground tabular-nums">
+                          {new Date(tx.due_date).toLocaleDateString("pt-BR")}
+                        </td>
+                        <td
+                          className={`py-3 pr-3 font-semibold tabular-nums ${
+                            tx.type === "receita"
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-rose-500"
+                          }`}
+                        >
+                          {tx.type === "receita" ? "+" : "-"} {formatMoney(tx.amount)}
+                        </td>
+                        <td className="py-3">
+                          <StatusBadge value={tx.status} label={tx.status} />
+                        </td>
+                        <td className="py-3 pl-3">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {tx.status !== "pago" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="press h-8 w-8 rounded-md text-emerald-600 hover:bg-emerald-500/10 hover:text-emerald-600 dark:text-emerald-400 dark:hover:text-emerald-300"
+                                title="Marcar como pago"
+                                aria-label="Marcar como pago"
+                                disabled={updateTransaction.isPending}
+                                onClick={() => markAsPaid(tx)}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="press h-8 w-8 rounded-md text-muted-foreground hover:bg-rose-500/10 hover:text-rose-500"
+                              title="Excluir lançamento"
+                              aria-label="Excluir lançamento"
+                              disabled={deleteTransaction.isPending}
+                              onClick={() => removeTransaction(tx)}
+                            >
+                              {deleteTransaction.isPending ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>
@@ -286,7 +370,7 @@ function FinanceiroPage() {
           <form onSubmit={handleCreateTransaction} className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label>Tipo de Registro</Label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <Button
                   type="button"
                   variant={type === "receita" ? "default" : "outline"}
@@ -317,7 +401,7 @@ function FinanceiroPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="val">Valor (R$)</Label>
                 <Input
@@ -359,7 +443,7 @@ function FinanceiroPage() {
               </select>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="cat">Categoria</Label>
                 <select
@@ -396,7 +480,8 @@ function FinanceiroPage() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full">
+            <Button type="submit" className="w-full" disabled={addTransaction.isPending}>
+              {addTransaction.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               Salvar Lançamento
             </Button>
           </form>

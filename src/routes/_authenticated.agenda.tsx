@@ -109,7 +109,7 @@ function Agenda() {
                 { value: "semana", label: "Semana" },
                 { value: "mes", label: "Mês" },
               ]}
-              className="hidden sm:flex"
+              className="basis-full w-full [&>button]:min-h-11 [&>button]:flex-1 sm:basis-auto sm:w-auto sm:[&>button]:min-h-9 sm:[&>button]:flex-none"
             />
           </>
         }
@@ -127,10 +127,10 @@ function Agenda() {
       ) : (
         <div
           className={cn(
-            "stagger grid gap-3",
+            "stagger gap-3",
             view === "semana"
-              ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
-              : "grid-cols-1",
+              ? "flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain pb-2 [scrollbar-width:thin] [&>section]:w-[85%] [&>section]:shrink-0 [&>section]:snap-start sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 sm:[&>section]:w-auto lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7"
+              : "grid grid-cols-1",
           )}
         >
           {days.map((day) => {
@@ -201,11 +201,13 @@ function MonthView({
           const todayFlag = isSameDay(day, today);
           const items = lessonsOf(day);
           return (
-            <div
+            <button
+              type="button"
               key={day.toISOString()}
               onClick={() => onDayClick(day)}
+              aria-label={`Ver ${day.toLocaleDateString("pt-BR", { dateStyle: "long" })}, ${items.length} aula${items.length === 1 ? "" : "s"}`}
               className={cn(
-                "group relative min-h-[72px] cursor-pointer border-b border-r border-border p-1.5 transition-colors sm:min-h-[96px] sm:p-2",
+                "group relative min-h-[76px] w-full cursor-pointer border-b border-r border-border p-1.5 text-left transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[96px] sm:p-2",
                 !inMonth && "bg-muted/30 opacity-50",
                 todayFlag && "bg-primary/[0.04]",
               )}
@@ -253,7 +255,7 @@ function MonthView({
                   </p>
                 )}
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -380,13 +382,13 @@ function LessonCard({
           e.stopPropagation();
           onDuplicate(lesson);
         }}
-        className="absolute right-1.5 top-1.5 hidden h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary group-hover:flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:right-1.5 sm:top-1.5 sm:h-7 sm:w-7"
         title="Duplicar aula"
         aria-label="Duplicar aula"
       >
         <Copy className="h-3.5 w-3.5" />
       </button>
-      <div className="flex items-center justify-between gap-1.5">
+      <div className="flex items-center justify-between gap-1.5 pr-9 sm:pr-7">
         <span
           className={cn(
             "text-xs font-semibold tabular-nums",
@@ -406,7 +408,12 @@ function LessonCard({
           )}
         />
       </div>
-      <p className={cn("mt-1 truncate pr-5 text-sm font-medium", cancelled && "line-through")}>
+      <p
+        className={cn(
+          "mt-1 truncate pr-9 text-sm font-medium sm:pr-7",
+          cancelled && "line-through",
+        )}
+      >
         {lesson.student?.name ?? "Aula"}
       </p>
       <div className="mt-1.5 flex flex-wrap gap-1">

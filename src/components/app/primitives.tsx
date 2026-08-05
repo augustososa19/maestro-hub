@@ -19,10 +19,14 @@ export function PageHeader({
   return (
     <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
-        <h1 className="truncate text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
+        <h1 className="text-xl font-semibold leading-tight tracking-tight sm:text-2xl">{title}</h1>
         {description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
+          {actions}
+        </div>
+      )}
     </header>
   );
 }
@@ -73,22 +77,29 @@ export function StatCard({
   return (
     <div
       className={cn(
-        "panel group relative flex items-center gap-3 overflow-hidden p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-panel",
+        "panel group relative flex items-center gap-2.5 overflow-hidden p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-panel sm:gap-3 sm:p-4",
         className,
       )}
     >
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
-        <p className={cn("mt-1 truncate text-2xl font-semibold tabular-nums", s.accent)}>{value}</p>
+        <p className="text-xs font-medium leading-tight text-muted-foreground">{label}</p>
+        <p
+          className={cn(
+            "mt-1 text-xl font-semibold leading-tight tabular-nums sm:text-2xl",
+            s.accent,
+          )}
+        >
+          {value}
+        </p>
         {hint && <p className="mt-0.5 truncate text-xs text-muted-foreground">{hint}</p>}
       </div>
       <span
         className={cn(
-          "grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:scale-105",
+          "grid h-9 w-9 shrink-0 place-items-center rounded-xl transition-transform duration-200 group-hover:scale-105 sm:h-10 sm:w-10",
           s.icon,
         )}
       >
-        <Icon className="h-5 w-5" />
+        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
       </span>
     </div>
   );

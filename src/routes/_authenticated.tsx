@@ -92,8 +92,8 @@ function AuthenticatedLayout() {
 
   return (
     <ShellContext.Provider value={api}>
-      <div className="flex min-h-screen w-full bg-background">
-        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface lg:flex">
+      <div className="flex min-h-dvh w-full bg-background">
+        <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-surface lg:flex">
           <Brand />
           <NavList onNavigate={() => undefined} />
           <UserBox
@@ -105,19 +105,22 @@ function AuthenticatedLayout() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:gap-3">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-1.5 border-b border-border bg-background/80 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/70 sm:gap-3 sm:px-4">
             <Sheet open={mobileNav} onOpenChange={setMobileNav}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="press lg:hidden"
+                  className="press h-10 w-10 lg:hidden"
                   aria-label="Abrir menu"
                 >
                   <Music4 className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-64 bg-surface p-0">
+              <SheetContent
+                side="left"
+                className="flex h-dvh w-[min(18rem,86vw)] flex-col bg-surface p-0"
+              >
                 <Brand />
                 <NavList onNavigate={() => setMobileNav(false)} />
                 <UserBox
@@ -132,10 +135,11 @@ function AuthenticatedLayout() {
             <button
               type="button"
               onClick={() => setSearchOpen(true)}
-              className="press group flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-border bg-surface px-3 text-sm text-muted-foreground transition-colors hover:border-ring/70 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:max-w-sm"
+              aria-label="Abrir busca global"
+              className="press group flex h-10 w-10 flex-none items-center justify-center gap-2 rounded-lg border border-border bg-surface p-0 text-sm text-muted-foreground transition-colors hover:border-ring/70 hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[480px]:w-auto min-[480px]:min-w-0 min-[480px]:flex-1 min-[480px]:justify-start min-[480px]:px-3 sm:max-w-sm"
             >
               <Search className="h-4 w-4 shrink-0 transition-transform group-hover:scale-110" />
-              <span className="truncate">Buscar…</span>
+              <span className="hidden truncate min-[480px]:inline">Buscar…</span>
               <kbd className="ml-auto hidden shrink-0 rounded border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground sm:block">
                 ⌘K
               </kbd>
@@ -144,7 +148,7 @@ function AuthenticatedLayout() {
             <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
               <ReminderBell />
               <ThemeToggle />
-              <Button size="sm" onClick={() => setLessonDraft({})}>
+              <Button size="sm" className="h-10" onClick={() => setLessonDraft({})}>
                 <Plus className="h-4 w-4" />
                 <span className="hidden sm:inline">Nova aula</span>
               </Button>
@@ -258,7 +262,7 @@ function ThemeToggle() {
       size="icon"
       aria-label="Alternar tema"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="press"
+      className="press h-10 w-10"
     >
       <Sun className="h-4 w-4 dark:hidden" />
       <Moon className="hidden h-4 w-4 dark:block" />

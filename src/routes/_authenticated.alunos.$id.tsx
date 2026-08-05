@@ -133,18 +133,20 @@ function StudentDetail() {
         <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" /> Alunos
       </Link>
 
-      <header className="panel grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4 p-4 sm:flex sm:items-center sm:justify-between sm:p-5">
+      <header className="panel flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-4">
-          <Avatar className="h-16 w-16 shrink-0 ring-1 ring-border">
+          <Avatar className="h-14 w-14 shrink-0 ring-1 ring-border sm:h-16 sm:w-16">
             <AvatarImage src={student.photo_url ?? undefined} alt={student.name} />
             <AvatarFallback>{initials(student.name)}</AvatarFallback>
           </Avatar>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="truncate text-xl font-semibold tracking-tight">{student.name}</h1>
+              <h1 className="break-words text-xl font-semibold leading-tight tracking-tight">
+                {student.name}
+              </h1>
               <StatusBadge value={student.status} label={labelOf(STUDENT_STATUS, student.status)} />
             </div>
-            <p className="truncate text-sm text-muted-foreground">
+            <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
               {student.instrument}
               {student.goal ? ` · ${student.goal}` : ""}
             </p>
@@ -157,15 +159,18 @@ function StudentDetail() {
             )}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+        <div className="grid w-full grid-cols-3 gap-2 md:w-auto md:shrink-0">
           <Button variant="outline" size="sm" onClick={() => setPaymentOpen(true)}>
-            <WalletCards className="h-4 w-4" /> Cobrança
+            <WalletCards className="h-4 w-4" />
+            <span className="hidden sm:inline">Cobrança</span>
           </Button>
           <Button variant="outline" size="sm" onClick={() => shell.openStudent(student)}>
-            <Pencil className="h-4 w-4" /> Editar
+            <Pencil className="h-4 w-4" />
+            <span className="hidden sm:inline">Editar</span>
           </Button>
           <Button size="sm" onClick={() => shell.openLesson({ studentId: student.id })}>
-            <CalendarPlus className="h-4 w-4" /> Agendar
+            <CalendarPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Agendar</span>
           </Button>
         </div>
       </header>
@@ -176,7 +181,7 @@ function StudentDetail() {
             href={`https://wa.me/${student.whatsapp.replace(/\D/g, "")}`}
             target="_blank"
             rel="noreferrer"
-            className="panel panel-hover flex min-w-0 items-center gap-3 p-3.5 text-sm transition-colors hover:border-primary/25 hover:bg-accent/30"
+            className="panel panel-hover flex min-w-0 items-center gap-3 p-3.5 text-sm transition-colors hover:border-primary/25 hover:bg-accent/30 sm:only:col-span-2"
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
               <Phone className="h-4 w-4" />
@@ -187,7 +192,7 @@ function StudentDetail() {
         {student.email && (
           <a
             href={`mailto:${student.email}`}
-            className="panel panel-hover flex min-w-0 items-center gap-3 p-3.5 text-sm transition-colors hover:border-primary/25 hover:bg-accent/30"
+            className="panel panel-hover flex min-w-0 items-center gap-3 p-3.5 text-sm transition-colors hover:border-primary/25 hover:bg-accent/30 sm:only:col-span-2"
           >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
               <Mail className="h-4 w-4" />
@@ -198,12 +203,14 @@ function StudentDetail() {
       </div>
 
       <Tabs defaultValue="historico">
-        <TabsList>
-          <TabsTrigger value="historico">Histórico</TabsTrigger>
-          <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
-          <TabsTrigger value="materiais">Materiais</TabsTrigger>
-          <TabsTrigger value="notas">Notas</TabsTrigger>
-        </TabsList>
+        <div className="-mx-4 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0">
+          <TabsList className="min-w-max">
+            <TabsTrigger value="historico">Histórico</TabsTrigger>
+            <TabsTrigger value="relatorios">Relatórios</TabsTrigger>
+            <TabsTrigger value="materiais">Materiais</TabsTrigger>
+            <TabsTrigger value="notas">Notas</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="historico" className="mt-3 space-y-2">
           {lessons.length === 0 && (
@@ -218,7 +225,7 @@ function StudentDetail() {
             {lessons.map((lesson) => (
               <div
                 key={lesson.id}
-                className="panel panel-hover mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-3 text-sm transition-colors hover:border-primary/25"
+                className="panel panel-hover mb-2 flex flex-col gap-3 p-3 text-sm transition-colors hover:border-primary/25 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium">{formatDateTime(lesson.starts_at)}</p>
@@ -226,7 +233,7 @@ function StudentDetail() {
                     {labelOf(LESSON_TYPES, lesson.lesson_type)} · {lesson.duration_minutes} min
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
                   <StatusBadge
                     value={lesson.status}
                     label={labelOf(LESSON_STATUS, lesson.status)}
@@ -246,7 +253,7 @@ function StudentDetail() {
         </TabsContent>
 
         <TabsContent value="relatorios" className="mt-3 space-y-2">
-          {lessons.length > 0 && (
+          {lessons.length > 0 && reports.length > 0 && (
             <div className="flex justify-end">
               <Button
                 size="sm"
@@ -277,7 +284,7 @@ function StudentDetail() {
               className="py-8"
             />
           )}
-          <div className="stagger">
+          <div className="stagger max-w-3xl">
             {reports.map((report) => (
               <article
                 key={report.id}
@@ -344,7 +351,7 @@ function StudentDetail() {
         </TabsContent>
 
         <TabsContent value="notas" className="mt-3">
-          <div className="panel space-y-3 p-4">
+          <div className="panel max-w-3xl space-y-3 p-4 sm:p-5">
             <div>
               <Label htmlFor="student-notes">Notas gerais do aluno</Label>
               <p className="mt-0.5 text-xs text-muted-foreground">
@@ -443,7 +450,7 @@ function StudentPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Lançar cobrança para {student.name}</DialogTitle>
         </DialogHeader>
@@ -457,7 +464,7 @@ function StudentPaymentDialog({
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="charge-value">Valor (R$)</Label>
               <Input
@@ -482,14 +489,14 @@ function StudentPaymentDialog({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="charge-category">Categoria</Label>
               <select
                 id="charge-category"
                 value={category}
                 onChange={(event) => setCategory(event.target.value as typeof category)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="mensalidade">Mensalidade</option>
                 <option value="aula_avulsa">Aula avulsa</option>
@@ -503,7 +510,7 @@ function StudentPaymentDialog({
                 id="charge-payment"
                 value={paymentMethod}
                 onChange={(event) => setPaymentMethod(event.target.value as typeof paymentMethod)}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="pix">PIX</option>
                 <option value="cartao">Cartão</option>
