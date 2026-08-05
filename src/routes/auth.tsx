@@ -43,7 +43,13 @@ function AuthPage() {
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (error) toast.error(error.message);
+    if (error) {
+      toast.error(
+        error.message === "Invalid login credentials"
+          ? "E-mail ou senha incorretos. Se ainda não tem conta, use \"Criar conta\"."
+          : error.message,
+      );
+    }
   };
 
   const signUp = async (e: React.FormEvent) => {
@@ -56,11 +62,17 @@ function AuthPage() {
     });
     setBusy(false);
     if (error) {
-      toast.error(error.message);
+      toast.error(
+        error.message.includes("already registered")
+          ? "Este e-mail já tem conta. Use a aba Entrar."
+          : error.message,
+      );
       return;
     }
-    if (!data.session) toast.success("Confira seu e-mail para confirmar a conta.");
+    if (data.session) toast.success("Conta criada! Entrando...");
+    else toast.success("Confira seu e-mail para confirmar a conta.");
   };
+
 
   const google = async () => {
     setBusy(true);
