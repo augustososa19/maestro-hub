@@ -9,19 +9,10 @@ type AuthState = {
   signOut: () => Promise<void>;
 };
 
-const GUEST_USER: User = {
-  id: "guest-user-id",
-  app_metadata: {},
-  user_metadata: { full_name: "Maestro Sound" },
-  aud: "authenticated",
-  created_at: new Date().toISOString(),
-  email: "contato@maestrosound.com",
-};
-
 const AuthContext = createContext<AuthState>({
   session: null,
-  user: GUEST_USER,
-  loading: false,
+  user: null,
+  loading: true,
   signOut: async () => {},
 });
 
@@ -43,12 +34,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setSession(null);
   };
 
-  const currentUser = session?.user ?? GUEST_USER;
-
   return (
-    <AuthContext.Provider value={{ session, user: currentUser, loading: false, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -57,4 +47,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   return useContext(AuthContext);
 }
-
