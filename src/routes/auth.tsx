@@ -73,6 +73,19 @@ function AuthPage() {
     else toast.success("Confira seu e-mail para confirmar a conta.");
   };
 
+  const forgot = async () => {
+    if (!email) {
+      toast.error("Digite seu e-mail acima para receber o link de redefinição.");
+      return;
+    }
+    setBusy(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    setBusy(false);
+    if (error) toast.error(error.message);
+    else toast.success("Enviamos um link para definir sua senha. Confira seu e-mail.");
+  };
 
   const google = async () => {
     setBusy(true);
@@ -82,6 +95,7 @@ function AuthPage() {
       toast.error("Não foi possível entrar com o Google.");
     }
   };
+
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-surface px-4 py-10">
@@ -124,7 +138,16 @@ function AuthPage() {
                 <Button type="submit" className="w-full" disabled={busy}>
                   {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Entrar"}
                 </Button>
+                <button
+                  type="button"
+                  onClick={forgot}
+                  disabled={busy}
+                  className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
+                >
+                  Esqueci minha senha / definir senha
+                </button>
               </form>
+
             </TabsContent>
 
             <TabsContent value="criar">
