@@ -78,6 +78,16 @@ function FinanceiroPage() {
       const parsed = JSON.parse(stored) as Partial<FinancialTransaction>[];
       if (!Array.isArray(parsed)) return;
       const demoIds = new Set(["tx-1", "tx-2", "tx-3", "tx-4", "tx-5"]);
+      const validTypes = new Set(["receita", "despesa"]);
+      const validCategories = new Set([
+        "mensalidade",
+        "aula_avulsa",
+        "pacote",
+        "equipamento",
+        "outros",
+      ]);
+      const validStatuses = new Set(["pago", "pendente", "atrasado"]);
+      const validMethods = new Set(["pix", "dinheiro", "cartao", "transferencia"]);
       setLegacyTransactions(
         parsed.filter(
           (item): item is FinancialTransaction =>
@@ -85,7 +95,17 @@ function FinanceiroPage() {
             !demoIds.has(item.id) &&
             typeof item.description === "string" &&
             typeof item.amount === "number" &&
-            typeof item.due_date === "string",
+            Number.isFinite(item.amount) &&
+            typeof item.due_date === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(item.due_date) &&
+            typeof item.type === "string" &&
+            validTypes.has(item.type) &&
+            typeof item.category === "string" &&
+            validCategories.has(item.category) &&
+            typeof item.status === "string" &&
+            validStatuses.has(item.status) &&
+            typeof item.payment_method === "string" &&
+            validMethods.has(item.payment_method),
         ),
       );
     } catch {
@@ -372,7 +392,7 @@ function FinanceiroPage() {
                       <div>
                         <dt className="text-muted-foreground">Vencimento</dt>
                         <dd className="mt-1 font-medium tabular-nums">
-                          {new Date(tx.due_date).toLocaleDateString("pt-BR")}
+                          {formatCivilDate(tx.due_date)}
                         </dd>
                       </div>
                       <div className="min-[360px]:text-right">
@@ -444,7 +464,7 @@ function FinanceiroPage() {
                           {tx.category.replace("_", " ")}
                         </td>
                         <td className="py-3 pr-3 text-xs text-muted-foreground tabular-nums">
-                          {new Date(tx.due_date).toLocaleDateString("pt-BR")}
+                          {formatCivilDate(tx.due_date)}
                         </td>
                         <td
                           className={`py-3 pr-3 font-semibold tabular-nums ${
@@ -632,6 +652,11 @@ function FinanceiroPage() {
 
 function formatMoney(value: number) {
   return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+}
+
+function formatCivilDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : value;
 }
 
 function getCurrentMonth() {

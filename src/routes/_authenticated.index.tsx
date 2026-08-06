@@ -57,7 +57,7 @@ function Dashboard() {
   );
   const week = lessons.filter((l) => {
     const d = new Date(l.starts_at);
-    return d >= now && d <= weekEnd && l.status !== "cancelada";
+    return d >= now && d <= weekEnd && ["agendada", "remarcada"].includes(l.status);
   });
   const upcoming = week[0] ?? null;
   const upcomingStudents = upcoming ? lessonStudents(upcoming) : [];
@@ -124,6 +124,7 @@ function Dashboard() {
             <h2 className="text-sm font-semibold">Agenda de hoje</h2>
             <Link
               to="/agenda"
+              search={{ date: undefined, lessonId: undefined }}
               className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary"
             >
               Ver agenda
@@ -261,6 +262,7 @@ function LessonRow({
         variant="ghost"
         size="sm"
         onClick={onReport}
+        disabled={lesson.status === "cancelada" || new Date(lesson.starts_at) > new Date()}
         className="shrink-0 text-muted-foreground hover:text-primary"
       >
         Relatório

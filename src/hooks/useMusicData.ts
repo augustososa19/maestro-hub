@@ -148,7 +148,11 @@ export function useStudentPrograms(studentId?: string) {
     queryKey: ["student-programs", user?.id, studentId ?? "all"],
     enabled: !!user,
     queryFn: async (): Promise<StudentProgram[]> => {
-      let query = supabase.from("student_programs").select("*").order("instrument");
+      let query = supabase
+        .from("student_programs")
+        .select("*")
+        .eq("active", true)
+        .order("instrument");
       if (studentId) query = query.eq("student_id", studentId);
       const { data, error } = await query;
       if (error) throw error;
@@ -322,7 +326,7 @@ export function useDeleteFinancialTransaction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("financial_transactions").delete().eq("id", id);
+      const { error } = await supabase.rpc("delete_financial_transaction", { p_id: id });
       if (error) throw error;
     },
     onSuccess: () => {

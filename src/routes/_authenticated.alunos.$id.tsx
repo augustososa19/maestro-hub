@@ -77,6 +77,9 @@ function StudentDetail() {
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const reportableLessons = lessons.filter(
+    (lesson) => lesson.status !== "cancelada" && new Date(lesson.starts_at) <= new Date(),
+  );
 
   useEffect(() => {
     setNotes(student?.notes ?? "");
@@ -288,7 +291,12 @@ function StudentDetail() {
                     label={labelOf(LESSON_STATUS, lesson.status)}
                     className="shrink-0"
                   />
-                  <Button variant="outline" size="sm" onClick={() => shell.openReport(lesson)}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!reportableLessons.some((item) => item.id === lesson.id)}
+                    onClick={() => shell.openReport(lesson)}
+                  >
                     <FileText className="h-4 w-4" /> Relatório
                   </Button>
                 </div>
@@ -298,15 +306,15 @@ function StudentDetail() {
         </TabsContent>
 
         <TabsContent value="relatorios" className="mt-3 space-y-2">
-          {lessons.length > 0 && reports.length > 0 && (
+          {reportableLessons.length > 0 && reports.length > 0 && (
             <div className="flex justify-end">
               <Button
                 size="sm"
                 onClick={() => {
                   const pendingLesson =
-                    lessons.find(
+                    reportableLessons.find(
                       (lesson) => !reports.some((report) => report.lesson_id === lesson.id),
-                    ) ?? lessons[0];
+                    ) ?? reportableLessons[0];
                   if (pendingLesson) shell.openReport(pendingLesson);
                 }}
               >
@@ -320,8 +328,8 @@ function StudentDetail() {
               title="Nenhum relatório salvo"
               description="Crie um relatório a partir de uma aula do histórico."
               action={
-                lessons[0] ? (
-                  <Button size="sm" onClick={() => shell.openReport(lessons[0]!)}>
+                reportableLessons[0] ? (
+                  <Button size="sm" onClick={() => shell.openReport(reportableLessons[0]!)}>
                     <FileText className="h-4 w-4" /> Criar relatório
                   </Button>
                 ) : undefined
@@ -359,7 +367,12 @@ function StudentDetail() {
                 {(() => {
                   const lesson = lessons.find((item) => item.id === report.lesson_id);
                   return lesson ? (
-                    <Button variant="outline" size="sm" onClick={() => shell.openReport(lesson)}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={!reportableLessons.some((item) => item.id === lesson.id)}
+                      onClick={() => shell.openReport(lesson)}
+                    >
                       <Pencil className="h-4 w-4" /> Editar relatório
                     </Button>
                   ) : null;

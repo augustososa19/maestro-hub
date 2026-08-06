@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ChevronRight, Search, UserPlus } from "lucide-react";
-import { useLessons, useStudents } from "@/hooks/useMusicData";
+import { useLessons, useStudentPrograms, useStudents } from "@/hooks/useMusicData";
 import { useShell } from "@/components/app/shell-context";
 import { STUDENT_STATUS, initials, labelOf, WEEKDAYS } from "@/lib/domain";
 import { formatDateTime } from "@/lib/dates";
@@ -33,8 +33,20 @@ function StudentsPage() {
   const shell = useShell();
   const { data: students = [], isLoading } = useStudents();
   const { data: lessons = [] } = useLessons();
+  const { data: programs = [] } = useStudentPrograms();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<string>("todos");
+  const programsByStudent = useMemo(() => {
+    const grouped = new Map<string, string[]>();
+    for (const program of programs) {
+      if (!program.active) continue;
+      grouped.set(program.student_id, [
+        ...(grouped.get(program.student_id) ?? []),
+        program.instrument,
+      ]);
+    }
+    return grouped;
+  }, [programs]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -42,12 +54,14 @@ function StudentsPage() {
       const matchQuery =
         !q ||
         s.name.toLowerCase().includes(q) ||
-        (s.instrument ?? "").toLowerCase().includes(q) ||
+        (programsByStudent.get(s.id) ?? [s.instrument]).some((instrument) =>
+          instrument.toLowerCase().includes(q),
+        ) ||
         (s.whatsapp ?? "").includes(q);
       const matchStatus = status === "todos" || s.status === status;
       return matchQuery && matchStatus;
     });
-  }, [students, query, status]);
+  }, [students, query, status, programsByStudent]);
 
   const nextLessonOf = (studentId: string) => {
     const now = Date.now();
@@ -162,7 +176,9 @@ function StudentsPage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium leading-tight">{student.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {student.instrument || "Sem instrumento"}
+                        {(programsByStudent.get(student.id) ?? [student.instrument])
+                          .filter(Boolean)
+                          .join(" · ") || "Sem instrumento"}
                       </p>
                     </div>
                     <StatusBadge

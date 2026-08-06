@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarOff, ChevronLeft, ChevronRight, Plus, Copy } from "lucide-react";
 import { addMonths, subMonths } from "date-fns";
@@ -20,6 +20,10 @@ import { PageHeader, EmptyState, Segmented } from "@/components/app/primitives";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/agenda")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    date: typeof search["date"] === "string" ? search["date"] : undefined,
+    lessonId: typeof search["lessonId"] === "string" ? search["lessonId"] : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Agenda · MusicCRM" },
@@ -38,8 +42,12 @@ type View = "dia" | "semana" | "mes";
 
 function Agenda() {
   const shell = useShell();
-  const [anchor, setAnchor] = useState(new Date());
-  const [view, setView] = useState<View>("semana");
+  const search = Route.useSearch();
+  const openedLessonId = useRef<string | null>(null);
+  const [anchor, setAnchor] = useState(() =>
+    search.date ? new Date(`${search.date}T12:00:00`) : new Date(),
+  );
+  const [view, setView] = useState<View>(search.date ? "dia" : "semana");
 
   const days = useMemo(() => {
     if (view === "semana") return weekDays(anchor);
@@ -56,6 +64,22 @@ function Agenda() {
   }, [days]);
 
   const { data: lessons = [] } = useLessons(lessonRange);
+
+  useEffect(() => {
+    if (!search.date) return;
+    const selectedDate = new Date(`${search.date}T12:00:00`);
+    if (Number.isNaN(selectedDate.getTime())) return;
+    setAnchor(selectedDate);
+    setView("dia");
+  }, [search.date]);
+
+  useEffect(() => {
+    if (!search.lessonId || openedLessonId.current === search.lessonId) return;
+    const lesson = lessons.find((item) => item.id === search.lessonId);
+    if (!lesson) return;
+    openedLessonId.current = lesson.id;
+    shell.openLesson({ lesson });
+  }, [lessons, search.lessonId, shell]);
 
   const lessonsOf = (day: Date) =>
     lessons

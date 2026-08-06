@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Trash2, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -70,6 +70,7 @@ export function LessonDialog({
   const [duplicating, setDuplicating] = useState(false);
   const editing = !!draft?.lesson && !draft.duplicate && !duplicating;
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [participants, setParticipants] = useState<ParticipantDraft[]>([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -85,6 +86,7 @@ export function LessonDialog({
   const [newStudentWhatsapp, setNewStudentWhatsapp] = useState("");
   const [newStudentInstrument, setNewStudentInstrument] = useState("Violão");
   const [savingStudent, setSavingStudent] = useState(false);
+  const defaultsApplied = useRef(false);
 
   useEffect(() => {
     if (!draft) return;
@@ -113,6 +115,7 @@ export function LessonDialog({
     setNewStudentName("");
     setNewStudentWhatsapp("");
     setDuplicating(!!draft.duplicate);
+    defaultsApplied.current = false;
   }, [draft]);
 
   const programsByStudent = useMemo(() => {
@@ -145,10 +148,11 @@ export function LessonDialog({
   );
 
   useEffect(() => {
-    if (!draft || draft.lesson || !firstStudent) return;
+    if (!draft || draft.lesson || !firstStudent || defaultsApplied.current) return;
     if (firstStudent.default_duration) setDuration(String(firstStudent.default_duration));
     setType(firstStudent.default_lesson_type);
     if (firstStudent.default_location) setLocation(firstStudent.default_location);
+    defaultsApplied.current = true;
   }, [firstStudent, draft]);
 
   const availabilityCheck = useMemo(() => {
@@ -165,39 +169,41 @@ export function LessonDialog({
     if (!user || !newStudentName.trim()) return;
     setSavingStudent(true);
     try {
-      const { data: studentData, error: studentError } = await supabase
-        .from("students")
-        .insert({
-          teacher_id: user.id,
-          name: newStudentName.trim(),
-          whatsapp: newStudentWhatsapp || null,
-          instrument: newStudentInstrument,
-          status: "ativo",
-        })
-        .select()
-        .single();
+      const { data: studentId, error: studentError } = await supabase.rpc(
+        "save_student_with_programs",
+        {
+          p_student: {
+            name: newStudentName.trim(),
+            whatsapp: newStudentWhatsapp || null,
+            instrument: newStudentInstrument,
+            status: "ativo",
+          },
+          p_programs: [
+            {
+              instrument: newStudentInstrument,
+              is_primary: true,
+              billing_type: "mensalidade",
+              auto_billing: false,
+              active: true,
+            },
+          ],
+        },
+      );
       if (studentError) throw studentError;
 
       const { data: programData, error: programError } = await supabase
         .from("student_programs")
-        .insert({
-          teacher_id: user.id,
-          student_id: studentData.id,
-          instrument: newStudentInstrument,
-          is_primary: true,
-        })
-        .select()
+        .select("id")
+        .eq("student_id", studentId)
+        .eq("is_primary", true)
         .single();
-      if (programError) {
-        await supabase.from("students").delete().eq("id", studentData.id);
-        throw programError;
-      }
+      if (programError) throw programError;
 
       toast.success(`Aluno "${newStudentName}" cadastrado!`);
       await invalidate();
       setParticipants((current) => [
-        ...current.filter((participant) => participant.studentId !== studentData.id),
-        { studentId: studentData.id, programId: programData.id },
+        ...current.filter((participant) => participant.studentId !== studentId),
+        { studentId, programId: programData.id },
       ]);
       setShowNewStudent(false);
       setNewStudentName("");
@@ -264,7 +270,12 @@ export function LessonDialog({
 
   const remove = async () => {
     if (!draft?.lesson) return;
+    if (!window.confirm("Excluir esta aula? Participantes e relatórios também serão removidos.")) {
+      return;
+    }
+    setDeleting(true);
     const { error } = await supabase.from("lessons").delete().eq("id", draft.lesson.id);
+    setDeleting(false);
     if (error) {
       toast.error(error.message);
       return;
@@ -579,9 +590,15 @@ export function LessonDialog({
                     type="button"
                     variant="ghost"
                     onClick={remove}
+                    disabled={deleting}
                     className="text-destructive"
                   >
-                    <Trash2 className="h-4 w-4" /> Excluir
+                    {deleting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
+                    Excluir
                   </Button>
                 </div>
               </>

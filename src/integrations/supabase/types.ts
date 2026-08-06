@@ -68,6 +68,27 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_suppressions: {
+        Row: {
+          created_at: string
+          id: string
+          source_key: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source_key: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source_key?: string
+          teacher_id?: string
+        }
+        Relationships: []
+      }
       financial_transactions: {
         Row: {
           amount: number
@@ -509,6 +530,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      delete_financial_transaction: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
       generate_monthly_charges: {
         Args: { p_competence?: string }
         Returns: number

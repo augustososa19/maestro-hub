@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -107,9 +107,15 @@ export function StudentDialog({
   const [programs, setPrograms] = useState<ProgramDraft[]>([emptyProgram()]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const initializedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedFor.current = null;
+      return;
+    }
+    const initializationKey = student?.id ?? "new";
+    if (initializedFor.current === initializationKey) return;
     if (student && loadingPrograms) return;
     if (student) {
       setForm({
@@ -136,6 +142,7 @@ export function StudentDialog({
       setForm({ ...EMPTY });
       setPrograms([emptyProgram()]);
     }
+    initializedFor.current = initializationKey;
   }, [student, open, studentPrograms, loadingPrograms]);
 
   const set = (key: keyof typeof EMPTY, value: string) => setForm((f) => ({ ...f, [key]: value }));
@@ -193,6 +200,10 @@ export function StudentDialog({
     }
     if (new Set(programs.map((program) => program.instrument)).size !== programs.length) {
       toast.error("O mesmo instrumento não pode ser adicionado duas vezes.");
+      return;
+    }
+    if (programs.some((program) => program.billing_type === "pacote" && !program.package_lessons)) {
+      toast.error("Informe a quantidade de aulas de cada pacote.");
       return;
     }
     setSaving(true);

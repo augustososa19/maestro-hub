@@ -8,7 +8,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { useLessons, useMaterials, useStudents } from "@/hooks/useMusicData";
+import { useLessons, useMaterials, useStudentPrograms, useStudents } from "@/hooks/useMusicData";
 import { formatDateTime } from "@/lib/dates";
 import { lessonStudentLabel } from "@/lib/domain";
 
@@ -21,12 +21,22 @@ export function GlobalSearch({
 }) {
   const navigate = useNavigate();
   const { data: students = [] } = useStudents();
+  const { data: programs = [] } = useStudentPrograms();
   const { data: lessons = [] } = useLessons();
   const { data: materials = [] } = useMaterials();
+  const instrumentsOf = (studentId: string, fallback: string) =>
+    programs
+      .filter((program) => program.student_id === studentId && program.active)
+      .map((program) => program.instrument)
+      .join(" · ") || fallback;
 
-  const go = (to: string, params?: Record<string, string>) => {
+  const go = (
+    to: string,
+    params?: Record<string, string>,
+    search?: Record<string, string | undefined>,
+  ) => {
     onOpenChange(false);
-    navigate({ to, params } as never);
+    navigate({ to, params, search } as never);
   };
 
   return (
@@ -36,25 +46,32 @@ export function GlobalSearch({
         <CommandEmpty>Nada encontrado.</CommandEmpty>
 
         <CommandGroup heading="Alunos">
-          {students.slice(0, 20).map((s) => (
+          {students.map((s) => (
             <CommandItem
               key={s.id}
-              value={`aluno ${s.name} ${s.instrument}`}
+              value={`aluno ${s.name} ${instrumentsOf(s.id, s.instrument)}`}
               onSelect={() => go("/alunos/$id", { id: s.id })}
             >
               <Users className="h-4 w-4 text-muted-foreground" />
               <span>{s.name}</span>
-              <span className="ml-auto text-xs text-muted-foreground">{s.instrument}</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {instrumentsOf(s.id, s.instrument)}
+              </span>
             </CommandItem>
           ))}
         </CommandGroup>
 
         <CommandGroup heading="Aulas">
-          {lessons.slice(0, 20).map((l) => (
+          {lessons.map((l) => (
             <CommandItem
               key={l.id}
               value={`aula ${lessonStudentLabel(l)} ${formatDateTime(l.starts_at)}`}
-              onSelect={() => go("/agenda")}
+              onSelect={() =>
+                go("/agenda", undefined, {
+                  date: l.starts_at.slice(0, 10),
+                  lessonId: l.id,
+                })
+              }
             >
               <CalendarDays className="h-4 w-4 text-muted-foreground" />
               <span>{lessonStudentLabel(l)}</span>
@@ -66,7 +83,7 @@ export function GlobalSearch({
         </CommandGroup>
 
         <CommandGroup heading="Materiais">
-          {materials.slice(0, 20).map((m) => (
+          {materials.map((m) => (
             <CommandItem
               key={m.id}
               value={`material ${m.title}`}

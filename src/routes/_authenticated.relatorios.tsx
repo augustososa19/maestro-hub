@@ -74,7 +74,14 @@ function RelatoriosPage() {
 
   const totalParticipations = realizedLessons.reduce((total, lesson) => {
     if (lesson.participants.length > 0) {
-      return total + new Set(lesson.participants.map((participant) => participant.student_id)).size;
+      return (
+        total +
+        new Set(
+          lesson.participants
+            .filter((participant) => participant.attendance === "presente")
+            .map((participant) => participant.student_id),
+        ).size
+      );
     }
     return total + (lesson.student_id ? 1 : 0);
   }, 0);
@@ -88,7 +95,9 @@ function RelatoriosPage() {
 
   for (const lesson of realizedLessons) {
     if (lesson.participants.length > 0) {
-      for (const participant of lesson.participants) {
+      for (const participant of lesson.participants.filter(
+        (item) => item.attendance === "presente",
+      )) {
         const instrument =
           participant.program?.instrument ||
           participant.student?.instrument ||

@@ -80,6 +80,7 @@ export function ReportDialog({
   const [individuals, setIndividuals] = useState<Record<string, IndividualReport>>({});
   const [activeTab, setActiveTab] = useState("general");
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [generatingAi, setGeneratingAi] = useState(false);
 
@@ -95,9 +96,9 @@ export function ReportDialog({
       initialIndividuals[student.id] = {
         ...emptyReport(),
         participantId,
-        attendance: ["presente", "ausente", "justificado"].includes(attendance)
+        attendance: ["pendente", "presente", "ausente", "justificado"].includes(attendance)
           ? attendance
-          : "presente",
+          : "pendente",
       };
     }
 
@@ -105,6 +106,7 @@ export function ReportDialog({
     setIndividuals(initialIndividuals);
     setActiveTab("general");
     setLoading(true);
+    setLoadError(false);
 
     const loadReports = async () => {
       try {
@@ -114,6 +116,7 @@ export function ReportDialog({
           .eq("lesson_id", lesson.id);
         if (!active) return;
         if (error) {
+          setLoadError(true);
           toast.error(error.message);
           return;
         }
@@ -145,7 +148,10 @@ export function ReportDialog({
           return next;
         });
       } catch (error) {
-        if (active) toast.error(getErrorMessage(error, "Não foi possível carregar os relatórios."));
+        if (active) {
+          setLoadError(true);
+          toast.error(getErrorMessage(error, "Não foi possível carregar os relatórios."));
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -188,6 +194,14 @@ export function ReportDialog({
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !lesson) return;
+    if (loadError) {
+      toast.error("Reabra o relatório para carregar os dados antes de salvar.");
+      return;
+    }
+    if (participants.some(({ student }) => individuals[student.id]?.attendance === "pendente")) {
+      toast.error("Confirme a presença de todos os participantes.");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -321,6 +335,7 @@ export function ReportDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="pendente">Não avaliado</SelectItem>
                         <SelectItem value="presente">Presente</SelectItem>
                         <SelectItem value="ausente">Ausente</SelectItem>
                         <SelectItem value="justificado">Justificado</SelectItem>
@@ -363,7 +378,7 @@ export function ReportDialog({
           </Tabs>
 
           <DialogFooter className="sticky bottom-0 mt-4 border-t bg-background pt-4">
-            <Button type="submit" disabled={saving || loading}>
+            <Button type="submit" disabled={saving || loading || loadError}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar e finalizar"}
             </Button>
           </DialogFooter>

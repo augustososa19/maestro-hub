@@ -317,10 +317,10 @@ function EvolucaoPage() {
                     {mod.topics.map((t) => (
                       <li
                         key={t.id}
-                        onClick={() => toggleTopic(mod.id, t.id)}
+                        onClick={locked ? undefined : () => toggleTopic(mod.id, t.id)}
                         className={cn(
                           "group flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors duration-150 hover:bg-accent/50",
-                          locked && "opacity-50 cursor-not-allowed",
+                          locked && "cursor-not-allowed opacity-50 hover:bg-transparent",
                         )}
                         aria-disabled={locked}
                       >
