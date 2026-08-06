@@ -17,6 +17,16 @@ export function formatDate(date: string | Date) {
   return format(new Date(date), "dd 'de' MMM yyyy", opts);
 }
 
+export function parseCivilDate(value: string) {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return new Date(Number.NaN);
+  return new Date(year, month - 1, day, 12, 0, 0, 0);
+}
+
+export function formatCivilDate(value: string) {
+  return format(parseCivilDate(value), "dd 'de' MMM yyyy", opts);
+}
+
 export function formatDateTime(date: string | Date) {
   return format(new Date(date), "dd MMM · HH:mm", opts);
 }

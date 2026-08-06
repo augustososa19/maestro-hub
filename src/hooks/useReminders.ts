@@ -1,11 +1,13 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { format } from "date-fns";
-import { useFinancialTransactions, useLessons } from "@/hooks/useMusicData";
-import { lessonStudentLabel, type FinancialTransaction } from "@/lib/domain";
+import { useCalendarEvents, useFinancialTransactions, useLessons } from "@/hooks/useMusicData";
+import { useNotificationPreferences } from "@/hooks/usePushNotifications";
+import { addDays, parseCivilDate } from "@/lib/dates";
+import { lessonStudentLabel, toDateInput, type FinancialTransaction } from "@/lib/domain";
 
-export type ReminderKind = "lesson" | "payment";
+export type ReminderKind = "lesson" | "event" | "payment";
 export type ReminderSeverity = "info" | "warning" | "danger";
 
 export type Reminder = {
@@ -21,11 +23,23 @@ export type Reminder = {
 const SOON_WINDOW_MINUTES = 90;
 
 export function useReminders() {
+  const [now, setNow] = useState(() => new Date());
+  const eventRange = useMemo(() => {
+    const from = new Date(now);
+    from.setHours(0, 0, 0, 0);
+    return { from, to: addDays(from, 2) };
+  }, [now]);
   const { data: lessons = [] } = useLessons();
+  const { data: events = [] } = useCalendarEvents(eventRange);
   const { data: transactions = [] } = useFinancialTransactions();
+  const { data: notificationPreferences } = useNotificationPreferences();
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return useMemo(() => {
-    const now = new Date();
     const reminders: Reminder[] = [];
 
     const todayLessons = lessons
@@ -54,6 +68,7 @@ export function useReminders() {
           title: `Aula em ${mins === 0 ? "agora" : `${mins} min`}`,
           subtitle: `${student} · ${time} · ${lesson.location ?? "local a definir"}`,
           href: "/agenda",
+          params: { date: toDateInput(start), lessonId: lesson.id },
         });
       } else if (mins > SOON_WINDOW_MINUTES) {
         reminders.push({
@@ -63,8 +78,51 @@ export function useReminders() {
           title: `Aula hoje às ${time}`,
           subtitle: `${student} · ${lesson.duration_minutes} min${lesson.location ? ` · ${lesson.location}` : ""}`,
           href: "/agenda",
+          params: { date: toDateInput(start), lessonId: lesson.id },
         });
       }
+    }
+
+    for (const event of events) {
+      const reminderMinutes =
+        event.reminder_minutes ?? notificationPreferences?.event_minutes ?? 30;
+      const start =
+        event.all_day && event.start_date
+          ? parseCivilDate(event.start_date)
+          : new Date(event.starts_at);
+      if (event.all_day) start.setHours(0, 0, 0, 0);
+      if (event.all_day) {
+        const today = toDateInput(now);
+        const activeToday =
+          !!event.start_date &&
+          !!event.end_date &&
+          today >= event.start_date &&
+          today <= event.end_date;
+        const mins = differenceInMinutes(start, now);
+        if (activeToday || (mins >= 0 && mins <= reminderMinutes)) {
+          reminders.push({
+            id: `event-${event.id}`,
+            kind: "event",
+            severity: activeToday ? "info" : "warning",
+            title: activeToday ? `Compromisso hoje: ${event.title}` : `Em breve: ${event.title}`,
+            subtitle: event.location ?? (event.blocks_lessons ? "Dia bloqueado" : "Compromisso"),
+            href: "/agenda",
+            params: { date: event.start_date ?? toDateInput(start), eventId: event.id },
+          });
+        }
+        continue;
+      }
+      const mins = differenceInMinutes(start, now);
+      if (mins < 0 || mins > Math.max(reminderMinutes, SOON_WINDOW_MINUTES)) continue;
+      reminders.push({
+        id: `event-${event.id}`,
+        kind: "event",
+        severity: mins <= reminderMinutes ? "warning" : "info",
+        title: `${event.title} em ${mins} min`,
+        subtitle: event.location ?? (event.blocks_lessons ? "Horário bloqueado" : "Compromisso"),
+        href: "/agenda",
+        params: { date: toDateInput(start), eventId: event.id },
+      });
     }
 
     const txList = transactions as FinancialTransaction[];
@@ -114,7 +172,7 @@ export function useReminders() {
       const order: Record<ReminderSeverity, number> = { danger: 0, warning: 1, info: 2 };
       return order[a.severity] - order[b.severity];
     });
-  }, [lessons, transactions]);
+  }, [events, lessons, notificationPreferences?.event_minutes, now, transactions]);
 }
 
 export function paymentDueSoon(tx: FinancialTransaction, now = new Date()) {

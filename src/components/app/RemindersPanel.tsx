@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Bell, CalendarDays, Wallet } from "lucide-react";
+import { AlertTriangle, Bell, CalendarClock, CalendarDays, Wallet } from "lucide-react";
 import { useReminders, type Reminder } from "@/hooks/useReminders";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/app/primitives";
@@ -28,7 +28,7 @@ export function RemindersPanel({ limit = 5 }: { limit?: number }) {
         <ReminderRow
           key={r.id}
           reminder={r}
-          onGo={() => navigate({ to: r.href, params: r.params } as never)}
+          onGo={() => navigate({ to: r.href, search: r.params } as never)}
         />
       ))}
     </ul>
@@ -47,6 +47,7 @@ function ReminderRow({ reminder, onGo }: { reminder: Reminder; onGo: () => void 
           className={cn(
             "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg",
             reminder.kind === "lesson" && "bg-primary/10 text-primary",
+            reminder.kind === "event" && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
             reminder.kind === "payment" &&
               (reminder.severity === "danger"
                 ? "bg-destructive/10 text-destructive"
@@ -55,6 +56,8 @@ function ReminderRow({ reminder, onGo }: { reminder: Reminder; onGo: () => void 
         >
           {reminder.kind === "lesson" ? (
             <CalendarDays className="h-4 w-4" />
+          ) : reminder.kind === "event" ? (
+            <CalendarClock className="h-4 w-4" />
           ) : (
             <Wallet className="h-4 w-4" />
           )}

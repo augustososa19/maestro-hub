@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { CalendarOff, ChevronLeft, ChevronRight, Plus, Copy } from "lucide-react";
+import {
+  Ban,
+  CalendarClock,
+  CalendarOff,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Plus,
+} from "lucide-react";
 import { addMonths, subMonths } from "date-fns";
-import { useLessons } from "@/hooks/useMusicData";
+import { useBlockedDates, useCalendarEvents, useLessons } from "@/hooks/useMusicData";
 import { useShell } from "@/components/app/shell-context";
+import { CalendarEventDialog, type CalendarEventDraft } from "@/components/app/CalendarEventDialog";
 import {
   addDays,
   formatMonthTitle,
@@ -13,7 +22,15 @@ import {
   monthGrid,
   weekDays,
 } from "@/lib/dates";
-import { WEEKDAYS, labelOf, LESSON_TYPES, type LessonWithStudent } from "@/lib/domain";
+import {
+  WEEKDAYS,
+  labelOf,
+  LESSON_TYPES,
+  toDateInput,
+  type BlockedDate,
+  type CalendarEvent,
+  type LessonWithStudent,
+} from "@/lib/domain";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader, EmptyState, Segmented } from "@/components/app/primitives";
@@ -23,6 +40,7 @@ export const Route = createFileRoute("/_authenticated/agenda")({
   validateSearch: (search: Record<string, unknown>) => ({
     date: typeof search["date"] === "string" ? search["date"] : undefined,
     lessonId: typeof search["lessonId"] === "string" ? search["lessonId"] : undefined,
+    eventId: typeof search["eventId"] === "string" ? search["eventId"] : undefined,
   }),
   head: () => ({
     meta: [
@@ -44,10 +62,12 @@ function Agenda() {
   const shell = useShell();
   const search = Route.useSearch();
   const openedLessonId = useRef<string | null>(null);
+  const openedEventId = useRef<string | null>(null);
   const [anchor, setAnchor] = useState(() =>
     search.date ? new Date(`${search.date}T12:00:00`) : new Date(),
   );
   const [view, setView] = useState<View>(search.date ? "dia" : "semana");
+  const [eventDraft, setEventDraft] = useState<CalendarEventDraft | null>(null);
 
   const days = useMemo(() => {
     if (view === "semana") return weekDays(anchor);
@@ -64,6 +84,8 @@ function Agenda() {
   }, [days]);
 
   const { data: lessons = [] } = useLessons(lessonRange);
+  const { data: blocks = [] } = useBlockedDates();
+  const { data: events = [] } = useCalendarEvents(lessonRange);
 
   useEffect(() => {
     if (!search.date) return;
@@ -81,10 +103,35 @@ function Agenda() {
     shell.openLesson({ lesson });
   }, [lessons, search.lessonId, shell]);
 
+  useEffect(() => {
+    if (!search.eventId || openedEventId.current === search.eventId) return;
+    const event = events.find((item) => item.id === search.eventId);
+    if (!event) return;
+    openedEventId.current = event.id;
+    setEventDraft({ event });
+  }, [events, search.eventId]);
+
   const lessonsOf = (day: Date) =>
     lessons
       .filter((l) => isSameDay(new Date(l.starts_at), day))
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+
+  const eventsOf = (day: Date) => {
+    const start = new Date(day);
+    start.setHours(0, 0, 0, 0);
+    const end = addDays(start, 1);
+    const date = toDateInput(day);
+    return events.filter((event) =>
+      event.all_day && event.start_date && event.end_date
+        ? date >= event.start_date && date <= event.end_date
+        : new Date(event.starts_at) < end && new Date(event.ends_at) > start,
+    );
+  };
+
+  const blockOf = (day: Date) => {
+    const date = toDateInput(day);
+    return blocks.find((block) => date >= block.start_date && date <= block.end_date);
+  };
 
   const shift = (dir: number) => {
     setAnchor((date) => {
@@ -107,6 +154,8 @@ function Agenda() {
   };
 
   const totalLessons = days.reduce((acc, d) => acc + lessonsOf(d).length, 0);
+  const totalEvents = days.reduce((acc, day) => acc + eventsOf(day).length, 0);
+  const totalBlockedDays = days.filter((day) => blockOf(day)).length;
 
   return (
     <div className="space-y-4 animate-fade-up sm:space-y-5">
@@ -163,6 +212,9 @@ function Agenda() {
               ]}
               className="basis-full w-full [&>button]:min-h-11 [&>button]:flex-1 sm:basis-auto sm:w-auto sm:[&>button]:min-h-9 sm:[&>button]:flex-none"
             />
+            <Button size="sm" variant="outline" onClick={() => setEventDraft({ startsAt: anchor })}>
+              <CalendarClock className="h-4 w-4" /> Compromisso
+            </Button>
           </>
         }
       />
@@ -171,6 +223,8 @@ function Agenda() {
         <MonthView
           anchor={anchor}
           lessonsOf={lessonsOf}
+          eventsOf={eventsOf}
+          blockOf={blockOf}
           onDayClick={(day) => {
             setAnchor(day);
             setView("dia");
@@ -189,6 +243,8 @@ function Agenda() {
             const items = lessonsOf(day);
             const today = isSameDay(day, new Date());
             const done = items.filter((l) => l.status === "realizada").length;
+            const dayEvents = eventsOf(day);
+            const block = blockOf(day);
             return (
               <DayCard
                 key={day.toISOString()}
@@ -196,16 +252,20 @@ function Agenda() {
                 items={items}
                 today={today}
                 done={done}
+                events={dayEvents}
+                block={block}
                 onNew={() => shell.openLesson({ startsAt: atNine(day) })}
+                onNewEvent={() => setEventDraft({ startsAt: atNine(day) })}
                 onOpen={(lesson) => shell.openLesson({ lesson })}
                 onDuplicate={(lesson) => shell.openLesson({ lesson, duplicate: true })}
+                onOpenEvent={(event) => setEventDraft({ event })}
               />
             );
           })}
         </div>
       )}
 
-      {view !== "mes" && totalLessons === 0 && (
+      {view !== "mes" && totalLessons === 0 && totalEvents === 0 && totalBlockedDays === 0 && (
         <EmptyState
           illustration="calendar"
           title="Sem aulas neste período"
@@ -218,6 +278,11 @@ function Agenda() {
           className="py-8"
         />
       )}
+
+      <CalendarEventDialog
+        draft={eventDraft}
+        onOpenChange={(open) => !open && setEventDraft(null)}
+      />
     </div>
   );
 }
@@ -225,10 +290,14 @@ function Agenda() {
 function MonthView({
   anchor,
   lessonsOf,
+  eventsOf,
+  blockOf,
   onDayClick,
 }: {
   anchor: Date;
   lessonsOf: (day: Date) => LessonWithStudent[];
+  eventsOf: (day: Date) => CalendarEvent[];
+  blockOf: (day: Date) => BlockedDate | undefined;
   onDayClick: (day: Date) => void;
 }) {
   const grid = monthGrid(anchor);
@@ -252,16 +321,19 @@ function MonthView({
           const inMonth = isSameMonth(day, anchor);
           const todayFlag = isSameDay(day, today);
           const items = lessonsOf(day);
+          const events = eventsOf(day);
+          const block = blockOf(day);
           return (
             <button
               type="button"
               key={day.toISOString()}
               onClick={() => onDayClick(day)}
-              aria-label={`Ver ${day.toLocaleDateString("pt-BR", { dateStyle: "long" })}, ${items.length} aula${items.length === 1 ? "" : "s"}`}
+              aria-label={`Ver ${day.toLocaleDateString("pt-BR", { dateStyle: "long" })}, ${items.length} aula${items.length === 1 ? "" : "s"}, ${events.length} compromisso${events.length === 1 ? "" : "s"}${block ? ", dia bloqueado" : ""}`}
               className={cn(
                 "group relative min-h-[76px] w-full cursor-pointer border-b border-r border-border p-1.5 text-left transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[96px] sm:p-2",
                 !inMonth && "bg-muted/30 opacity-50",
                 todayFlag && "bg-primary/[0.04]",
+                block && "bg-rose-500/[0.06]",
               )}
             >
               <div className="flex items-center justify-between">
@@ -284,7 +356,27 @@ function MonthView({
                 )}
               </div>
               <div className="mt-1 space-y-0.5">
-                {items.slice(0, 2).map((lesson) => (
+                {block && (
+                  <div
+                    className="truncate rounded bg-rose-500/15 px-1 py-0.5 text-[10px] font-medium leading-tight text-rose-700 dark:text-rose-300"
+                    title={block.reason ?? "Dia bloqueado"}
+                  >
+                    <Ban className="mr-0.5 inline h-2.5 w-2.5" /> Bloqueado
+                  </div>
+                )}
+                {events.slice(0, block ? 1 : 2).map((event) => (
+                  <div
+                    key={event.id}
+                    className="truncate rounded bg-amber-500/15 px-1 py-0.5 text-[10px] leading-tight text-amber-800 dark:text-amber-300"
+                    title={event.title}
+                  >
+                    <span className="font-semibold">
+                      {event.all_day ? "Dia" : formatTime(event.starts_at)}
+                    </span>{" "}
+                    <span className="hidden lg:inline">{event.title}</span>
+                  </div>
+                ))}
+                {items.slice(0, block || events.length > 0 ? 1 : 2).map((lesson) => (
                   <div
                     key={lesson.id}
                     className={cn(
@@ -301,9 +393,10 @@ function MonthView({
                     <span className="hidden lg:inline">{participantSummary(lesson)}</span>
                   </div>
                 ))}
-                {items.length > 2 && (
+                {items.length + events.length + (block ? 1 : 0) > 2 && (
                   <p className="px-1 text-[10px] font-medium text-muted-foreground">
-                    +{items.length - 2} aula{items.length - 2 > 1 ? "s" : ""}
+                    +{items.length + events.length + (block ? 1 : 0) - 2} item
+                    {items.length + events.length + (block ? 1 : 0) - 2 > 1 ? "s" : ""}
                   </p>
                 )}
               </div>
@@ -318,26 +411,35 @@ function MonthView({
 function DayCard({
   day,
   items,
+  events,
+  block,
   today,
   done,
   onNew,
+  onNewEvent,
   onOpen,
   onDuplicate,
+  onOpenEvent,
 }: {
   day: Date;
   items: LessonWithStudent[];
+  events: CalendarEvent[];
+  block: BlockedDate | undefined;
   today: boolean;
   done: number;
   onNew: () => void;
+  onNewEvent: () => void;
   onOpen: (l: LessonWithStudent) => void;
   onDuplicate: (l: LessonWithStudent) => void;
+  onOpenEvent: (event: CalendarEvent) => void;
 }) {
   return (
     <section
       className={cn(
         "panel panel-hover flex min-h-36 flex-col p-3 transition-all duration-200",
         today ? "border-primary/40 bg-primary/[0.03] shadow-panel" : "hover:border-primary/20",
-        items.length === 0 && !today && "opacity-80",
+        items.length === 0 && events.length === 0 && !block && !today && "opacity-80",
+        block && "border-rose-500/30 bg-rose-500/[0.03]",
       )}
     >
       <div className="mb-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
@@ -357,23 +459,54 @@ function DayCard({
             <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-primary animate-pulse" />
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="press h-7 w-7 shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-          aria-label="Nova aula neste dia"
-          onClick={onNew}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="press h-7 w-7 shrink-0 rounded-md text-amber-700 transition-colors hover:bg-amber-500/15 dark:text-amber-300"
+            aria-label="Novo compromisso neste dia"
+            title="Novo compromisso"
+            onClick={onNewEvent}
+          >
+            <CalendarClock className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="press h-7 w-7 shrink-0 rounded-md text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+            aria-label="Nova aula neste dia"
+            title={block ? "Dia bloqueado" : "Nova aula"}
+            disabled={!!block}
+            onClick={onNew}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {items.length === 0 ? (
+      {block && (
+        <div className="mb-2 rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-xs text-rose-700 dark:text-rose-300">
+          <p className="flex items-center gap-1 font-semibold">
+            <Ban className="h-3.5 w-3.5" /> Dia bloqueado
+          </p>
+          {block.reason && <p className="mt-0.5 break-words opacity-80">{block.reason}</p>}
+        </div>
+      )}
+
+      {events.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1">
+          {events.map((event) => (
+            <EventCard key={event.id} event={event} onClick={() => onOpenEvent(event)} />
+          ))}
+        </div>
+      )}
+
+      {items.length === 0 && events.length === 0 && !block ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-1 py-3">
           <CalendarOff className="h-4 w-4 text-muted-foreground/40" />
           <p className="text-[11px] text-muted-foreground/60">Livre</p>
         </div>
-      ) : (
+      ) : items.length > 0 ? (
         <>
           <div className="flex flex-wrap gap-1">
             {items.map((lesson) => (
@@ -396,8 +529,29 @@ function DayCard({
             </p>
           )}
         </>
-      )}
+      ) : null}
     </section>
+  );
+}
+
+function EventCard({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="press w-full rounded-lg border border-amber-500/25 bg-amber-500/10 p-2 text-left transition-colors hover:bg-amber-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+          {event.all_day ? "Dia inteiro" : formatTime(event.starts_at)}
+        </span>
+        {event.blocks_lessons && <Ban className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />}
+      </div>
+      <p className="mt-1 truncate text-sm font-medium">{event.title}</p>
+      {event.location && (
+        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{event.location}</p>
+      )}
+    </button>
   );
 }
 

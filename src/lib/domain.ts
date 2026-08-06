@@ -6,6 +6,7 @@ export type LessonReport = Tables<"lesson_reports">;
 export type Material = Tables<"materials">;
 export type Availability = Tables<"availability">;
 export type BlockedDate = Tables<"blocked_dates">;
+export type CalendarEvent = Tables<"calendar_events">;
 export type Profile = Tables<"profiles">;
 export type StudentProgram = Tables<"student_programs">;
 export type LessonParticipant = Tables<"lesson_participants">;

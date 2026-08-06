@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Plus, Trash2, Upload, Loader2 } from "lucide-react";
+import { BellRing, Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { uploadToMedia } from "@/lib/storage";
@@ -12,13 +12,15 @@ import {
   useProfile,
 } from "@/hooks/useMusicData";
 import { useTheme } from "@/hooks/useTheme";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { WEEKDAYS } from "@/lib/domain";
-import { formatDate } from "@/lib/dates";
+import { addDays, formatCivilDate, parseCivilDate } from "@/lib/dates";
 import { PageHeader } from "@/components/app/primitives";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -52,6 +54,7 @@ function SettingsPage() {
   const { data: profile } = useProfile();
   const { data: availability = [] } = useAvailability();
   const { data: blocks = [] } = useBlockedDates();
+  const push = usePushNotifications();
 
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -114,10 +117,46 @@ function SettingsPage() {
   const addBlock = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !block.start) return;
+    if (block.end && block.end < block.start) {
+      toast.error("A data final não pode ser anterior à inicial.");
+      return;
+    }
+    const endDate = block.end || block.start;
+    const rangeStart = parseCivilDate(block.start);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = addDays(parseCivilDate(endDate), 1);
+    rangeEnd.setHours(0, 0, 0, 0);
+    const [lessonsResult, eventsResult] = await Promise.all([
+      supabase
+        .from("lessons")
+        .select("id", { count: "exact", head: true })
+        .neq("status", "cancelada")
+        .gte("starts_at", rangeStart.toISOString())
+        .lt("starts_at", rangeEnd.toISOString()),
+      supabase
+        .from("calendar_events")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "ativo")
+        .lt("starts_at", rangeEnd.toISOString())
+        .gt("ends_at", rangeStart.toISOString()),
+    ]);
+    if (lessonsResult.error || eventsResult.error) {
+      toast.error("Não foi possível verificar os conflitos deste período.");
+      return;
+    }
+    const conflictCount = (lessonsResult.count ?? 0) + (eventsResult.count ?? 0);
+    if (
+      conflictCount > 0 &&
+      !window.confirm(
+        `Existem ${conflictCount} aula${conflictCount === 1 ? " ou compromisso" : "s ou compromissos"} neste período. Deseja bloquear mesmo assim? Os itens existentes continuarão visíveis.`,
+      )
+    ) {
+      return;
+    }
     const { error } = await supabase.from("blocked_dates").insert({
       teacher_id: user.id,
       start_date: block.start,
-      end_date: block.end || block.start,
+      end_date: endDate,
       reason: block.reason || null,
     });
     if (error) {
@@ -131,6 +170,33 @@ function SettingsPage() {
   const removeRow = async (table: "availability" | "blocked_dates", id: string) => {
     await supabase.from(table).delete().eq("id", id);
     invalidate();
+  };
+
+  const togglePush = async (enabled: boolean) => {
+    try {
+      if (enabled) await push.enable();
+      else await push.disable();
+      toast.success(
+        enabled ? "Notificações ativadas neste dispositivo." : "Notificações desativadas.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível atualizar as notificações.",
+      );
+    }
+  };
+
+  const updatePushPreference = async (
+    updates: Partial<Parameters<typeof push.savePreferences>[0]>,
+  ) => {
+    try {
+      await push.savePreferences(updates);
+      toast.success("Preferência atualizada.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar a preferência.",
+      );
+    }
   };
 
   return (
@@ -268,7 +334,7 @@ function SettingsPage() {
               className="panel-hover grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-surface p-3 text-sm transition-colors hover:border-primary/25"
             >
               <span className="truncate">
-                {formatDate(b.start_date)} — {formatDate(b.end_date)}
+                {formatCivilDate(b.start_date)} — {formatCivilDate(b.end_date)}
                 {b.reason ? ` · ${b.reason}` : ""}
               </span>
               <Button
@@ -317,6 +383,95 @@ function SettingsPage() {
             <Plus className="h-4 w-4" /> Bloquear
           </Button>
         </form>
+      </section>
+
+      <section className="panel space-y-4 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-semibold">
+              <BellRing className="h-4 w-4 text-primary" /> Notificações no celular
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Receba lembretes mesmo com o sistema fechado. No iPhone, adicione o MusicCRM à Tela de
+              Início antes de ativar.
+            </p>
+          </div>
+          <Switch
+            aria-label="Ativar notificações"
+            checked={push.subscribed && push.permission === "granted"}
+            disabled={push.busy || push.isLoading || !push.supported || !push.configured}
+            onCheckedChange={togglePush}
+          />
+        </div>
+
+        {!push.supported && (
+          <p className="rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            Este navegador não oferece Web Push. Use Chrome no Android ou instale o site na Tela de
+            Início no iPhone.
+          </p>
+        )}
+        {push.supported && !push.configured && (
+          <p className="rounded-lg bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+            A infraestrutura está pronta, mas a variável VITE_VAPID_PUBLIC_KEY precisa ser
+            configurada no ambiente do projeto.
+          </p>
+        )}
+        {push.permission === "denied" && (
+          <p className="rounded-lg bg-destructive/10 p-3 text-xs text-destructive">
+            As notificações foram bloqueadas no navegador. Libere a permissão nas configurações do
+            site e tente novamente.
+          </p>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-2">
+            <Label>Lembrar aulas</Label>
+            <Select
+              value={String(push.preferences.lesson_minutes)}
+              disabled={!push.preferences.enabled}
+              onValueChange={(value) => updatePushPreference({ lesson_minutes: Number(value) })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10 minutos antes</SelectItem>
+                <SelectItem value="30">30 minutos antes</SelectItem>
+                <SelectItem value="60">1 hora antes</SelectItem>
+                <SelectItem value="1440">1 dia antes</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Lembrar compromissos</Label>
+            <Select
+              value={String(push.preferences.event_minutes)}
+              disabled={!push.preferences.enabled}
+              onValueChange={(value) => updatePushPreference({ event_minutes: Number(value) })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10 minutos antes</SelectItem>
+                <SelectItem value="30">30 minutos antes</SelectItem>
+                <SelectItem value="60">1 hora antes</SelectItem>
+                <SelectItem value="1440">1 dia antes</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:self-end">
+            <Label htmlFor="payment-push">Vencimentos</Label>
+            <Switch
+              id="payment-push"
+              checked={push.preferences.payment_notifications}
+              disabled={!push.preferences.enabled}
+              onCheckedChange={(checked) =>
+                updatePushPreference({ payment_notifications: checked })
+              }
+            />
+          </div>
+        </div>
       </section>
 
       <section className="panel space-y-3 p-4 sm:p-5">

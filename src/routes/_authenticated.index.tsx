@@ -124,7 +124,7 @@ function Dashboard() {
             <h2 className="text-sm font-semibold">Agenda de hoje</h2>
             <Link
               to="/agenda"
-              search={{ date: undefined, lessonId: undefined }}
+              search={{ date: undefined, lessonId: undefined, eventId: undefined }}
               className="group inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-primary"
             >
               Ver agenda

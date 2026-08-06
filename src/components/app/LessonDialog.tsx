@@ -278,7 +278,15 @@ export function LessonDialog({
       onOpenChange(false);
     } catch (error) {
       const message = errorMessage(error, "Não foi possível salvar a aula.");
-      toast.error(message.includes("Conflito") ? "Conflito de horário com outra aula." : message);
+      toast.error(
+        message.includes("compromisso")
+          ? "Este horário está ocupado por um compromisso."
+          : message.includes("Data bloqueada")
+            ? "Esta data está bloqueada na agenda."
+            : message.includes("Conflito")
+              ? "Conflito de horário com outra aula."
+              : message,
+      );
     } finally {
       setSaving(false);
     }

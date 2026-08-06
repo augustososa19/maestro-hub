@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { toDateInput } from "@/lib/domain";
 import type {
   Availability,
   BlockedDate,
+  CalendarEvent,
   FinancialTransaction,
   Lesson,
   LessonReport,
@@ -206,6 +208,89 @@ export function useBlockedDates() {
   });
 }
 
+export function useCalendarEvents(range?: { from: Date; to: Date }) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["calendar-events", user?.id, range?.from.toISOString(), range?.to.toISOString()],
+    enabled: !!user,
+    queryFn: async (): Promise<CalendarEvent[]> => {
+      if (!range) {
+        const { data, error } = await supabase
+          .from("calendar_events")
+          .select("*")
+          .eq("status", "ativo")
+          .order("starts_at");
+        if (error) throw error;
+        return data ?? [];
+      }
+      const lastVisibleDay = new Date(range.to.getTime() - 1);
+      const [timedResult, allDayResult] = await Promise.all([
+        supabase
+          .from("calendar_events")
+          .select("*")
+          .eq("status", "ativo")
+          .eq("all_day", false)
+          .lt("starts_at", range.to.toISOString())
+          .gt("ends_at", range.from.toISOString()),
+        supabase
+          .from("calendar_events")
+          .select("*")
+          .eq("status", "ativo")
+          .eq("all_day", true)
+          .lte("start_date", toDateInput(lastVisibleDay))
+          .gte("end_date", toDateInput(range.from)),
+      ]);
+      if (timedResult.error) throw timedResult.error;
+      if (allDayResult.error) throw allDayResult.error;
+      return [...(timedResult.data ?? []), ...(allDayResult.data ?? [])].sort((a, b) =>
+        a.starts_at.localeCompare(b.starts_at),
+      );
+    },
+  });
+}
+
+export type CalendarEventInput = {
+  id?: string;
+  title: string;
+  description: string | null;
+  starts_at: string;
+  ends_at: string;
+  all_day: boolean;
+  start_date: string | null;
+  end_date: string | null;
+  blocks_lessons: boolean;
+  location: string | null;
+  reminder_minutes: number | null;
+};
+
+export function useSaveCalendarEvent() {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...event }: CalendarEventInput): Promise<CalendarEvent> => {
+      if (!user) throw new Error("Usuário não autenticado.");
+      const query = id
+        ? supabase.from("calendar_events").update(event).eq("id", id)
+        : supabase.from("calendar_events").insert({ ...event, teacher_id: user.id });
+      const { data, error } = await query.select("*").single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["calendar-events"] }),
+  });
+}
+
+export function useDeleteCalendarEvent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("calendar_events").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["calendar-events"] }),
+  });
+}
+
 export function useInvalidateAll() {
   const qc = useQueryClient();
   return () => {
@@ -218,6 +303,7 @@ export function useInvalidateAll() {
       "materials",
       "availability",
       "blocked",
+      "calendar-events",
       "profile",
       "student-programs",
       "lesson-participants",

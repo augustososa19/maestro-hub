@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, Bell, CalendarDays, Wallet } from "lucide-react";
+import { AlertTriangle, Bell, CalendarClock, CalendarDays, Wallet } from "lucide-react";
 import { useReminders, type Reminder } from "@/hooks/useReminders";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -17,7 +17,7 @@ export function ReminderBell() {
 
   const go = (r: Reminder) => {
     setOpen(false);
-    navigate({ to: r.href, params: r.params } as never);
+    navigate({ to: r.href, search: r.params } as never);
   };
 
   return (
@@ -75,6 +75,7 @@ export function ReminderBell() {
                       className={cn(
                         "mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-lg",
                         r.kind === "lesson" && "bg-primary/10 text-primary",
+                        r.kind === "event" && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
                         r.kind === "payment" &&
                           (r.severity === "danger"
                             ? "bg-destructive/10 text-destructive"
@@ -83,6 +84,8 @@ export function ReminderBell() {
                     >
                       {r.kind === "lesson" ? (
                         <CalendarDays className="h-4 w-4" />
+                      ) : r.kind === "event" ? (
+                        <CalendarClock className="h-4 w-4" />
                       ) : (
                         <Wallet className="h-4 w-4" />
                       )}

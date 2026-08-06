@@ -33,6 +33,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = async () => {
+    try {
+      if ("serviceWorker" in navigator) {
+        const registration = await navigator.serviceWorker.getRegistration();
+        const subscription = await registration?.pushManager.getSubscription();
+        if (subscription) {
+          await supabase.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+          await subscription.unsubscribe();
+        }
+      }
+    } catch (error) {
+      console.error("Não foi possível remover a subscription de push.", error);
+    }
     await supabase.auth.signOut();
     setSession(null);
   };
