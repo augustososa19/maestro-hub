@@ -41,6 +41,27 @@ export type Database = {
         }
         Relationships: []
       }
+      billing_suppressions: {
+        Row: {
+          created_at: string
+          id: string
+          source_key: string
+          teacher_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source_key: string
+          teacher_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source_key?: string
+          teacher_id?: string
+        }
+        Relationships: []
+      }
       blocked_dates: {
         Row: {
           created_at: string
@@ -64,27 +85,6 @@ export type Database = {
           id?: string
           reason?: string | null
           start_date?: string
-          teacher_id?: string
-        }
-        Relationships: []
-      }
-      billing_suppressions: {
-        Row: {
-          created_at: string
-          id: string
-          source_key: string
-          teacher_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          source_key: string
-          teacher_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          source_key?: string
           teacher_id?: string
         }
         Relationships: []
@@ -285,6 +285,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "lessons"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_reports_participant_fkey"
+            columns: ["lesson_id", "student_id"]
+            isOneToOne: false
+            referencedRelation: "lesson_participants"
+            referencedColumns: ["lesson_id", "student_id"]
           },
           {
             foreignKeyName: "lesson_reports_student_id_fkey"
@@ -565,7 +572,7 @@ export type Database = {
         Returns: undefined
       }
       save_lesson_with_participants: {
-        Args: { p_lesson: Json; p_lesson_id: string | null; p_participants: Json }
+        Args: { p_lesson: Json; p_lesson_id: string; p_participants: Json }
         Returns: string
       }
       save_student_with_programs: {

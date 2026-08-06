@@ -256,7 +256,7 @@ export function LessonDialog({
     };
     try {
       const { error } = await supabase.rpc("save_lesson_with_participants", {
-        p_lesson_id: editing ? draft!.lesson!.id : null,
+        p_lesson_id: (editing ? draft!.lesson!.id : null) as unknown as string,
         p_lesson: payload,
         p_participants: participants.map((participant) => ({
           student_id: participant.studentId,
