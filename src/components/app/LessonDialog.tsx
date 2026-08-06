@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Trash2, Copy } from "lucide-react";
+import { Copy, FileText, Loader2, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -19,6 +19,7 @@ import {
   toDateInput,
   toTimeInput,
   type LessonWithStudent,
+  type StudentProgram,
 } from "@/lib/domain";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -51,14 +52,19 @@ export type LessonDraft = {
 type ParticipantDraft = {
   studentId: string;
   programId?: string | undefined;
+  billingMode: "recorrente" | "avulsa" | "pacote" | "cortesia";
+  billingAmount: string;
+  paymentMethod: "pix" | "dinheiro" | "cartao" | "transferencia";
 };
 
 export function LessonDialog({
   draft,
   onOpenChange,
+  onReport,
 }: {
   draft: LessonDraft | null;
   onOpenChange: (open: boolean) => void;
+  onReport?: (lesson: LessonWithStudent) => void;
 }) {
   const { user } = useAuth();
   const invalidate = useInvalidateAll();
@@ -97,11 +103,15 @@ export function LessonDialog({
         ? base.participants.map((participant) => ({
             studentId: participant.student_id,
             programId: participant.student_program_id ?? undefined,
+            billingMode: normalizeBillingMode(participant.billing_mode),
+            billingAmount:
+              participant.billing_amount === null ? "" : String(participant.billing_amount),
+            paymentMethod: normalizePaymentMethod(participant.payment_method),
           }))
         : base?.student_id
-          ? [{ studentId: base.student_id }]
+          ? [{ studentId: base.student_id, ...billingDefaults() }]
           : draft.studentId
-            ? [{ studentId: draft.studentId }]
+            ? [{ studentId: draft.studentId, ...billingDefaults() }]
             : [],
     );
     setDate(toDateInput(start));
@@ -136,7 +146,7 @@ export function LessonDialog({
         const program = programs.find((item) => item.is_primary) ?? programs[0];
         if (!program) return participant;
         changed = true;
-        return { ...participant, programId: program.id };
+        return { ...participant, programId: program.id, ...billingDefaults(program) };
       });
       return changed ? next : current;
     });
@@ -203,7 +213,7 @@ export function LessonDialog({
       await invalidate();
       setParticipants((current) => [
         ...current.filter((participant) => participant.studentId !== studentId),
-        { studentId, programId: programData.id },
+        { studentId, programId: programData.id, ...billingDefaults() },
       ]);
       setShowNewStudent(false);
       setNewStudentName("");
@@ -251,6 +261,12 @@ export function LessonDialog({
         p_participants: participants.map((participant) => ({
           student_id: participant.studentId,
           student_program_id: participant.programId ?? null,
+          billing_mode: participant.billingMode,
+          billing_amount:
+            participant.billingMode === "avulsa" && participant.billingAmount
+              ? Number(participant.billingAmount)
+              : null,
+          payment_method: participant.billingMode === "avulsa" ? participant.paymentMethod : null,
         })),
       });
       if (error) throw error;
@@ -423,7 +439,11 @@ export function LessonDialog({
                                 programs.find((item) => item.is_primary) ?? programs[0];
                               return [
                                 ...current,
-                                { studentId: student.id, programId: program?.id },
+                                {
+                                  studentId: student.id,
+                                  programId: program?.id,
+                                  ...billingDefaults(program),
+                                },
                               ];
                             });
                           }}
@@ -437,13 +457,18 @@ export function LessonDialog({
                         {participant && programs.length > 1 ? (
                           <Select
                             value={participant.programId ?? ""}
-                            onValueChange={(programId) =>
+                            onValueChange={(programId) => {
+                              const selectedProgram = programs.find(
+                                (item) => item.id === programId,
+                              );
                               setParticipants((current) =>
                                 current.map((item) =>
-                                  item.studentId === student.id ? { ...item, programId } : item,
+                                  item.studentId === student.id
+                                    ? { ...item, programId, ...billingDefaults(selectedProgram) }
+                                    : item,
                                 ),
-                              )
-                            }
+                              );
+                            }}
                           >
                             <SelectTrigger className="h-8 w-36">
                               <SelectValue placeholder="Programa" />
@@ -468,6 +493,120 @@ export function LessonDialog({
               </div>
             )}
           </div>
+
+          {participants.length > 0 && (
+            <section className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+              <div>
+                <Label>Condição financeira desta aula</Label>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Recorrente já está incluída na mensalidade. Avulsa gera uma cobrança no
+                  Financeiro.
+                </p>
+              </div>
+              <div className="space-y-2">
+                {participants.map((participant) => {
+                  const student = students.find((item) => item.id === participant.studentId);
+                  const program = studentPrograms.find((item) => item.id === participant.programId);
+                  return (
+                    <div
+                      key={participant.studentId}
+                      className="rounded-md border bg-background p-3"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{student?.name ?? "Aluno"}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {program?.instrument ??
+                              student?.instrument ??
+                              "Instrumento não definido"}
+                          </p>
+                        </div>
+                        <Select
+                          value={participant.billingMode}
+                          onValueChange={(billingMode: ParticipantDraft["billingMode"]) =>
+                            setParticipants((current) =>
+                              current.map((item) =>
+                                item.studentId === participant.studentId
+                                  ? {
+                                      ...item,
+                                      billingMode,
+                                      billingAmount:
+                                        billingMode === "avulsa" && program?.amount !== null
+                                          ? String(program?.amount ?? "")
+                                          : "",
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
+                        >
+                          <SelectTrigger className="h-9 w-full sm:w-52">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="recorrente">Inclusa na mensalidade</SelectItem>
+                            <SelectItem value="avulsa">Cobrar aula avulsa</SelectItem>
+                            <SelectItem value="pacote">Inclusa em pacote</SelectItem>
+                            <SelectItem value="cortesia">Cortesia / sem cobrança</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {participant.billingMode === "avulsa" && (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1.5">
+                            <Label htmlFor={`billing-amount-${participant.studentId}`}>Valor</Label>
+                            <Input
+                              id={`billing-amount-${participant.studentId}`}
+                              type="number"
+                              min="0.01"
+                              step="0.01"
+                              required
+                              value={participant.billingAmount}
+                              onChange={(event) =>
+                                setParticipants((current) =>
+                                  current.map((item) =>
+                                    item.studentId === participant.studentId
+                                      ? { ...item, billingAmount: event.target.value }
+                                      : item,
+                                  ),
+                                )
+                              }
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label>Forma de pagamento</Label>
+                            <Select
+                              value={participant.paymentMethod}
+                              onValueChange={(paymentMethod: ParticipantDraft["paymentMethod"]) =>
+                                setParticipants((current) =>
+                                  current.map((item) =>
+                                    item.studentId === participant.studentId
+                                      ? { ...item, paymentMethod }
+                                      : item,
+                                  ),
+                                )
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="pix">PIX</SelectItem>
+                                <SelectItem value="cartao">Cartão</SelectItem>
+                                <SelectItem value="dinheiro">Dinheiro</SelectItem>
+                                <SelectItem value="transferencia">Transferência</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -574,7 +713,22 @@ export function LessonDialog({
           <DialogFooter className="gap-2 sm:justify-between">
             {editing ? (
               <>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {onReport &&
+                    draft?.lesson &&
+                    draft.lesson.status !== "cancelada" &&
+                    new Date(draft.lesson.starts_at) <= new Date() && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          onOpenChange(false);
+                          onReport?.(draft.lesson!);
+                        }}
+                      >
+                        <FileText className="h-4 w-4" /> Relatório
+                      </Button>
+                    )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -647,4 +801,33 @@ function errorMessage(error: unknown, fallback: string) {
     if (typeof message === "string") return message;
   }
   return fallback;
+}
+
+function billingDefaults(program?: StudentProgram) {
+  const billingMode: ParticipantDraft["billingMode"] =
+    program?.billing_type === "aula_avulsa"
+      ? "avulsa"
+      : program?.billing_type === "pacote"
+        ? "pacote"
+        : "recorrente";
+  return {
+    billingMode,
+    billingAmount:
+      billingMode === "avulsa" && program?.amount !== null && program?.amount !== undefined
+        ? String(program.amount)
+        : "",
+    paymentMethod: "pix" as const,
+  };
+}
+
+function normalizeBillingMode(value: string): ParticipantDraft["billingMode"] {
+  return ["recorrente", "avulsa", "pacote", "cortesia"].includes(value)
+    ? (value as ParticipantDraft["billingMode"])
+    : "recorrente";
+}
+
+function normalizePaymentMethod(value: string | null): ParticipantDraft["paymentMethod"] {
+  return ["pix", "dinheiro", "cartao", "transferencia"].includes(value ?? "")
+    ? (value as ParticipantDraft["paymentMethod"])
+    : "pix";
 }

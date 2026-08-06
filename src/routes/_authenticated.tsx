@@ -161,7 +161,14 @@ function AuthenticatedLayout() {
         </div>
       </div>
 
-      <LessonDialog draft={lessonDraft} onOpenChange={(o) => !o && setLessonDraft(null)} />
+      <LessonDialog
+        draft={lessonDraft}
+        onOpenChange={(o) => !o && setLessonDraft(null)}
+        onReport={(lesson) => {
+          setLessonDraft(null);
+          setReportLesson(lesson);
+        }}
+      />
       <StudentDialog student={editingStudent} open={studentOpen} onOpenChange={setStudentOpen} />
       <ReportDialog lesson={reportLesson} onOpenChange={(o) => !o && setReportLesson(null)} />
       <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />

@@ -297,7 +297,10 @@ function StudentDetail() {
                     disabled={!reportableLessons.some((item) => item.id === lesson.id)}
                     onClick={() => shell.openReport(lesson)}
                   >
-                    <FileText className="h-4 w-4" /> Relatório
+                    <FileText className="h-4 w-4" />
+                    {reports.some((report) => report.lesson_id === lesson.id)
+                      ? "Ver relatório"
+                      : "Lançar relatório"}
                   </Button>
                 </div>
               </div>

@@ -98,6 +98,8 @@ export type Database = {
           description: string
           due_date: string
           id: string
+          lesson_id: string | null
+          origin: string
           paid_at: string | null
           payment_method: string
           source_key: string | null
@@ -117,6 +119,8 @@ export type Database = {
           description: string
           due_date: string
           id?: string
+          lesson_id?: string | null
+          origin?: string
           paid_at?: string | null
           payment_method?: string
           source_key?: string | null
@@ -136,6 +140,8 @@ export type Database = {
           description?: string
           due_date?: string
           id?: string
+          lesson_id?: string | null
+          origin?: string
           paid_at?: string | null
           payment_method?: string
           source_key?: string | null
@@ -148,6 +154,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "financial_transactions_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "financial_transactions_student_id_fkey"
             columns: ["student_id"]
@@ -167,30 +180,39 @@ export type Database = {
       lesson_participants: {
         Row: {
           attendance: string
+          billing_amount: number | null
+          billing_mode: string
           created_at: string
           id: string
           lesson_id: string
           notes: string | null
+          payment_method: string | null
           student_id: string
           student_program_id: string | null
           teacher_id: string
         }
         Insert: {
           attendance?: string
+          billing_amount?: number | null
+          billing_mode?: string
           created_at?: string
           id?: string
           lesson_id: string
           notes?: string | null
+          payment_method?: string | null
           student_id: string
           student_program_id?: string | null
           teacher_id: string
         }
         Update: {
           attendance?: string
+          billing_amount?: number | null
+          billing_mode?: string
           created_at?: string
           id?: string
           lesson_id?: string
           notes?: string | null
+          payment_method?: string | null
           student_id?: string
           student_program_id?: string | null
           teacher_id?: string

@@ -1,14 +1,32 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Award, Check, Clock, GraduationCap, Lock, Sparkles, Trophy } from "lucide-react";
+import {
+  Award,
+  Check,
+  Clock,
+  GraduationCap,
+  Lock,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  Trophy,
+} from "lucide-react";
 import { DEFAULT_CURRICULUM_MODULES, type CurriculumModule } from "@/lib/domain";
 import { useStudentPrograms, useStudentReports, useStudents } from "@/hooks/useMusicData";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PageHeader, EmptyState } from "@/components/app/primitives";
 import { cn } from "@/lib/utils";
 
 const STORAGE_PREFIX = "maestro_curriculum_";
+
+type ModuleEditor = { id?: string; title: string; level: CurriculumModule["level"] };
+type TopicEditor = { moduleId: string; id?: string; title: string };
 
 export const Route = createFileRoute("/_authenticated/evolucao")({
   head: () => ({
@@ -57,7 +75,7 @@ function loadModules(storageKey: string): CurriculumModule[] {
     const raw = localStorage.getItem(storageKey);
     if (!raw) return DEFAULT_CURRICULUM_MODULES;
     const saved = JSON.parse(raw) as CurriculumModule[];
-    if (!Array.isArray(saved) || saved.length === 0) return DEFAULT_CURRICULUM_MODULES;
+    if (!Array.isArray(saved)) return DEFAULT_CURRICULUM_MODULES;
     return saved;
   } catch {
     return DEFAULT_CURRICULUM_MODULES;
@@ -72,6 +90,8 @@ function EvolucaoPage() {
   const { data: reports = [] } = useStudentReports(selectedStudent?.id ?? "");
   const [selectedProgramId, setSelectedProgramId] = useState("");
   const [modules, setModules] = useState<CurriculumModule[]>(DEFAULT_CURRICULUM_MODULES);
+  const [moduleEditor, setModuleEditor] = useState<ModuleEditor | null>(null);
+  const [topicEditor, setTopicEditor] = useState<TopicEditor | null>(null);
   const studentPrograms = programs.filter((program) => program.student_id === selectedStudent?.id);
   const selectedProgram =
     studentPrograms.find((program) => program.id === selectedProgramId) ??
@@ -120,15 +140,9 @@ function EvolucaoPage() {
     setModules(loadModules(storageKey));
   }, [selectedProgram?.is_primary, selectedStudent?.id, storageKey]);
 
-  const toggleTopic = (modId: string, topicId: string) => {
+  const updateModules = (update: (current: CurriculumModule[]) => CurriculumModule[]) => {
     setModules((prev) => {
-      const next = prev.map((mod) => {
-        if (mod.id !== modId) return mod;
-        return {
-          ...mod,
-          topics: mod.topics.map((t) => (t.id === topicId ? { ...t, completed: !t.completed } : t)),
-        };
-      });
+      const next = update(prev);
       try {
         if (storageKey) localStorage.setItem(storageKey, JSON.stringify(next));
       } catch {
@@ -136,6 +150,85 @@ function EvolucaoPage() {
       }
       return next;
     });
+  };
+
+  const toggleTopic = (modId: string, topicId: string) => {
+    updateModules((current) =>
+      current.map((mod) =>
+        mod.id === modId
+          ? {
+              ...mod,
+              topics: mod.topics.map((topic) =>
+                topic.id === topicId ? { ...topic, completed: !topic.completed } : topic,
+              ),
+            }
+          : mod,
+      ),
+    );
+  };
+
+  const saveModule = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!moduleEditor?.title.trim()) return;
+    updateModules((current) =>
+      moduleEditor.id
+        ? current.map((module) =>
+            module.id === moduleEditor.id
+              ? { ...module, title: moduleEditor.title.trim(), level: moduleEditor.level }
+              : module,
+          )
+        : [
+            ...current,
+            {
+              id: crypto.randomUUID(),
+              title: moduleEditor.title.trim(),
+              level: moduleEditor.level,
+              topics: [],
+            },
+          ],
+    );
+    setModuleEditor(null);
+  };
+
+  const removeModule = (module: CurriculumModule) => {
+    if (!window.confirm(`Excluir o módulo “${module.title}” e todos os seus tópicos?`)) return;
+    updateModules((current) => current.filter((item) => item.id !== module.id));
+  };
+
+  const saveTopic = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!topicEditor?.title.trim()) return;
+    updateModules((current) =>
+      current.map((module) =>
+        module.id === topicEditor.moduleId
+          ? {
+              ...module,
+              topics: topicEditor.id
+                ? module.topics.map((topic) =>
+                    topic.id === topicEditor.id
+                      ? { ...topic, title: topicEditor.title.trim() }
+                      : topic,
+                  )
+                : [
+                    ...module.topics,
+                    { id: crypto.randomUUID(), title: topicEditor.title.trim(), completed: false },
+                  ],
+            }
+          : module,
+      ),
+    );
+    setTopicEditor(null);
+  };
+
+  const removeTopic = (moduleId: string, topicId: string) => {
+    if (!window.confirm("Excluir este tópico do cronograma?")) return;
+    updateModules((current) =>
+      current.map((module) =>
+        module.id === moduleId
+          ? { ...module, topics: module.topics.filter((topic) => topic.id !== topicId) }
+          : module,
+      ),
+    );
   };
 
   const totalTopics = modules.flatMap((m) => m.topics).length;
@@ -250,14 +343,31 @@ function EvolucaoPage() {
 
       <section className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <div className="space-y-3">
-          <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
-            <GraduationCap className="h-5 w-5 text-primary" /> Jornada de aprendizado
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-base font-semibold tracking-tight">
+              <GraduationCap className="h-5 w-5 text-primary" /> Jornada de aprendizado
+            </h2>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!selectedStudent}
+              onClick={() => setModuleEditor({ title: "", level: "Iniciante" })}
+            >
+              <Plus className="h-4 w-4" /> Módulo
+            </Button>
+          </div>
 
           <div className="stagger space-y-3">
+            {modules.length === 0 && (
+              <EmptyState
+                illustration="check"
+                title="Cronograma vazio"
+                description="Adicione um módulo para montar uma jornada personalizada para este aluno."
+              />
+            )}
             {modules.map((mod, idx) => {
               const done = mod.topics.filter((t) => t.completed).length;
-              const pct = Math.round((done / mod.topics.length) * 100);
+              const pct = Math.round((done / (mod.topics.length || 1)) * 100);
               const meta = levelMeta(mod.level);
               const LevelIcon = meta.icon;
               const locked =
@@ -291,14 +401,36 @@ function EvolucaoPage() {
                         </p>
                       </div>
                     </div>
-                    <span
-                      className={cn(
-                        "inline-flex shrink-0 items-center gap-1 rounded-full border border-transparent px-2.5 py-0.5 text-[11px] font-semibold",
-                        meta.cls,
-                      )}
-                    >
-                      <LevelIcon className="h-3 w-3" /> {meta.label}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border border-transparent px-2.5 py-0.5 text-[11px] font-semibold",
+                          meta.cls,
+                        )}
+                      >
+                        <LevelIcon className="h-3 w-3" /> {meta.label}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        aria-label={`Editar ${mod.title}`}
+                        onClick={() =>
+                          setModuleEditor({ id: mod.id, title: mod.title, level: mod.level })
+                        }
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        aria-label={`Excluir ${mod.title}`}
+                        onClick={() => removeModule(mod)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="mt-3 flex items-center gap-2">
@@ -347,9 +479,43 @@ function EvolucaoPage() {
                         {locked && (
                           <Lock className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
                         )}
+                        <span className="flex shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            aria-label={`Editar ${t.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setTopicEditor({ moduleId: mod.id, id: t.id, title: t.title });
+                            }}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            aria-label={`Excluir ${t.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              removeTopic(mod.id, t.id);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </span>
                       </li>
                     ))}
                   </ul>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="mt-2 text-muted-foreground"
+                    onClick={() => setTopicEditor({ moduleId: mod.id, title: "" })}
+                  >
+                    <Plus className="h-4 w-4" /> Adicionar tópico
+                  </Button>
                 </article>
               );
             })}
@@ -401,6 +567,87 @@ function EvolucaoPage() {
           )}
         </div>
       </section>
+
+      <Dialog open={moduleEditor !== null} onOpenChange={(open) => !open && setModuleEditor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{moduleEditor?.id ? "Editar módulo" : "Novo módulo"}</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={saveModule}>
+            <div className="space-y-2">
+              <Label htmlFor="module-title">Nome do módulo</Label>
+              <Input
+                id="module-title"
+                autoFocus
+                required
+                value={moduleEditor?.title ?? ""}
+                onChange={(event) =>
+                  setModuleEditor((current) =>
+                    current ? { ...current, title: event.target.value } : current,
+                  )
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="module-level">Nível</Label>
+              <select
+                id="module-level"
+                value={moduleEditor?.level ?? "Iniciante"}
+                onChange={(event) =>
+                  setModuleEditor((current) =>
+                    current
+                      ? { ...current, level: event.target.value as CurriculumModule["level"] }
+                      : current,
+                  )
+                }
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {Object.keys(LEVEL_META).map((levelOption) => (
+                  <option key={levelOption} value={levelOption}>
+                    {levelOption}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setModuleEditor(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Salvar módulo</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={topicEditor !== null} onOpenChange={(open) => !open && setTopicEditor(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{topicEditor?.id ? "Editar tópico" : "Novo tópico"}</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={saveTopic}>
+            <div className="space-y-2">
+              <Label htmlFor="topic-title">Nome do tópico</Label>
+              <Input
+                id="topic-title"
+                autoFocus
+                required
+                value={topicEditor?.title ?? ""}
+                onChange={(event) =>
+                  setTopicEditor((current) =>
+                    current ? { ...current, title: event.target.value } : current,
+                  )
+                }
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setTopicEditor(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Salvar tópico</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

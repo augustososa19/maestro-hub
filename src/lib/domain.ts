@@ -204,6 +204,7 @@ export function fromDateTimeInput(date: string, time: string) {
 export type FinancialTransaction = {
   id: string;
   teacher_id?: string;
+  lesson_id?: string | null;
   student_id?: string | null;
   student_program_id?: string | null;
   student_name?: string | null;
@@ -213,6 +214,7 @@ export type FinancialTransaction = {
   category: "mensalidade" | "aula_avulsa" | "pacote" | "equipamento" | "outros";
   status: "pago" | "pendente" | "atrasado";
   payment_method: "pix" | "dinheiro" | "cartao" | "transferencia";
+  origin?: "manual" | "mensalidade_automatica" | "aula_avulsa" | "pacote";
   competence_date: string;
   due_date: string;
   paid_at?: string | null;

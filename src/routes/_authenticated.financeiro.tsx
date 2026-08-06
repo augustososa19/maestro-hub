@@ -30,6 +30,7 @@ import {
 } from "@/hooks/useMusicData";
 import type { FinancialTransaction } from "@/lib/domain";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -318,6 +319,27 @@ function FinanceiroPage() {
         </section>
       )}
 
+      <section className="panel grid gap-3 p-4 text-xs sm:grid-cols-3">
+        <div>
+          <p className="font-semibold text-foreground">Mensalidade recorrente</p>
+          <p className="mt-1 text-muted-foreground">
+            Gerada automaticamente uma vez por mês a partir do plano do aluno.
+          </p>
+        </div>
+        <div>
+          <p className="font-semibold text-foreground">Aula avulsa</p>
+          <p className="mt-1 text-muted-foreground">
+            Gerada ao agendar a aula quando “Cobrar aula avulsa” estiver selecionado.
+          </p>
+        </div>
+        <div>
+          <p className="font-semibold text-foreground">Lançamento manual</p>
+          <p className="mt-1 text-muted-foreground">
+            Criado diretamente pelo botão “Novo Lançamento”.
+          </p>
+        </div>
+      </section>
+
       {/* Cards Financeiros */}
       <section className="stagger grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
         <StatCard
@@ -384,6 +406,9 @@ function FinanceiroPage() {
                         <p className="mt-1 break-words text-xs text-muted-foreground">
                           {tx.student_name || "Sem aluno vinculado"}
                         </p>
+                        <Badge variant="outline" className="mt-2 text-[10px]">
+                          {originLabel(tx.origin)}
+                        </Badge>
                       </div>
                       <StatusBadge value={tx.status} label={tx.status} />
                     </div>
@@ -441,11 +466,12 @@ function FinanceiroPage() {
               </div>
 
               <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[640px] text-left text-sm">
+                <table className="w-full min-w-[760px] text-left text-sm">
                   <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="pb-2.5 pr-3 font-semibold">Descrição</th>
-                      <th className="pb-2.5 pr-3 font-semibold">Aluno / Origem</th>
+                      <th className="pb-2.5 pr-3 font-semibold">Aluno</th>
+                      <th className="pb-2.5 pr-3 font-semibold">Origem</th>
                       <th className="pb-2.5 pr-3 font-semibold">Categoria</th>
                       <th className="pb-2.5 pr-3 font-semibold">Vencimento</th>
                       <th className="pb-2.5 pr-3 font-semibold">Valor</th>
@@ -459,6 +485,11 @@ function FinanceiroPage() {
                         <td className="py-3 pr-3 font-medium">{tx.description}</td>
                         <td className="py-3 pr-3 text-muted-foreground">
                           {tx.student_name || "—"}
+                        </td>
+                        <td className="py-3 pr-3 text-xs">
+                          <Badge variant="outline" className="text-[10px]">
+                            {originLabel(tx.origin)}
+                          </Badge>
                         </td>
                         <td className="py-3 pr-3 text-xs capitalize">
                           {tx.category.replace("_", " ")}
@@ -657,6 +688,19 @@ function formatMoney(value: number) {
 function formatCivilDate(value: string) {
   const [year, month, day] = value.split("-");
   return year && month && day ? `${day}/${month}/${year}` : value;
+}
+
+function originLabel(origin: FinancialTransaction["origin"]) {
+  switch (origin) {
+    case "mensalidade_automatica":
+      return "Mensal recorrente";
+    case "aula_avulsa":
+      return "Aula avulsa";
+    case "pacote":
+      return "Pacote";
+    default:
+      return "Manual";
+  }
 }
 
 function getCurrentMonth() {
