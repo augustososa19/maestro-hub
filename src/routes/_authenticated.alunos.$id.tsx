@@ -19,6 +19,7 @@ import {
   useMaterials,
   useStudent,
   useStudentLessons,
+  useStudentPrograms,
   useStudentReports,
 } from "@/hooks/useMusicData";
 import { useShell } from "@/components/app/shell-context";
@@ -31,9 +32,9 @@ import {
   formatBytes,
   initials,
   labelOf,
-  type Lesson,
   type LessonWithStudent,
   type Student,
+  type StudentProgram,
 } from "@/lib/domain";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +71,7 @@ function StudentDetail() {
   const invalidate = useInvalidateAll();
   const { data: student, isLoading } = useStudent(id);
   const { data: lessons = [] } = useStudentLessons(id);
+  const { data: programs = [] } = useStudentPrograms(id);
   const { data: reports = [] } = useStudentReports(id);
   const { data: materials = [] } = useMaterials(id);
   const [notes, setNotes] = useState("");
@@ -79,18 +81,6 @@ function StudentDetail() {
   useEffect(() => {
     setNotes(student?.notes ?? "");
   }, [student?.notes]);
-
-  const withStudent = (lesson: Lesson): LessonWithStudent => ({
-    ...lesson,
-    student: student
-      ? {
-          id: student.id,
-          name: student.name,
-          photo_url: student.photo_url,
-          instrument: student.instrument,
-        }
-      : null,
-  });
 
   const saveNotes = async () => {
     if (!student) return;
@@ -146,10 +136,24 @@ function StudentDetail() {
               </h1>
               <StatusBadge value={student.status} label={labelOf(STUDENT_STATUS, student.status)} />
             </div>
-            <p className="mt-0.5 text-sm leading-snug text-muted-foreground">
-              {student.instrument}
-              {student.goal ? ` · ${student.goal}` : ""}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              {(programs.length > 0
+                ? programs
+                : [{ id: "fallback", instrument: student.instrument, is_primary: true }]
+              ).map((program) => (
+                <Badge
+                  key={program.id}
+                  variant={program.is_primary ? "default" : "outline"}
+                  className="text-xs"
+                >
+                  {program.instrument}
+                  {program.is_primary ? " · Principal" : ""}
+                </Badge>
+              ))}
+            </div>
+            {student.goal && (
+              <p className="mt-1 text-sm leading-snug text-muted-foreground">{student.goal}</p>
+            )}
             {student.default_weekday !== null && (
               <div className="mt-2">
                 <Badge variant="outline">
@@ -174,6 +178,43 @@ function StudentDetail() {
           </Button>
         </div>
       </header>
+
+      {programs.length > 0 && (
+        <section className="panel p-4" aria-labelledby="student-programs-title">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 id="student-programs-title" className="text-sm font-semibold">
+              Planos
+            </h2>
+            <span className="text-xs text-muted-foreground">
+              {programs.length} {programs.length === 1 ? "instrumento" : "instrumentos"}
+            </span>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {programs.map((program) => (
+              <div key={program.id} className="rounded-lg border border-border/70 p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate font-medium">{program.instrument}</span>
+                  {program.is_primary && (
+                    <Badge variant="secondary" className="shrink-0 text-[10px]">
+                      Principal
+                    </Badge>
+                  )}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {billingLabel(program.billing_type)}
+                  {program.amount !== null ? ` · ${formatMoney(program.amount)}` : ""}
+                  {program.billing_type === "mensalidade" && program.due_day
+                    ? ` · vence dia ${program.due_day}`
+                    : ""}
+                  {program.billing_type === "pacote" && program.package_lessons
+                    ? ` · ${program.package_lessons} aulas`
+                    : ""}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         {student.whatsapp && (
@@ -232,6 +273,14 @@ function StudentDetail() {
                   <p className="truncate text-xs text-muted-foreground">
                     {labelOf(LESSON_TYPES, lesson.lesson_type)} · {lesson.duration_minutes} min
                   </p>
+                  {lesson.participants.length > 1 && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <Badge variant="secondary" className="mr-1.5 align-middle text-[10px]">
+                        Coletiva
+                      </Badge>
+                      {participantSummary(lesson)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:shrink-0 sm:justify-end">
                   <StatusBadge
@@ -239,11 +288,7 @@ function StudentDetail() {
                     label={labelOf(LESSON_STATUS, lesson.status)}
                     className="shrink-0"
                   />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => shell.openReport(withStudent(lesson))}
-                  >
+                  <Button variant="outline" size="sm" onClick={() => shell.openReport(lesson)}>
                     <FileText className="h-4 w-4" /> Relatório
                   </Button>
                 </div>
@@ -262,7 +307,7 @@ function StudentDetail() {
                     lessons.find(
                       (lesson) => !reports.some((report) => report.lesson_id === lesson.id),
                     ) ?? lessons[0];
-                  if (pendingLesson) shell.openReport(withStudent(pendingLesson));
+                  if (pendingLesson) shell.openReport(pendingLesson);
                 }}
               >
                 <FileText className="h-4 w-4" /> Novo relatório
@@ -276,7 +321,7 @@ function StudentDetail() {
               description="Crie um relatório a partir de uma aula do histórico."
               action={
                 lessons[0] ? (
-                  <Button size="sm" onClick={() => shell.openReport(withStudent(lessons[0]!))}>
+                  <Button size="sm" onClick={() => shell.openReport(lessons[0]!)}>
                     <FileText className="h-4 w-4" /> Criar relatório
                   </Button>
                 ) : undefined
@@ -290,9 +335,14 @@ function StudentDetail() {
                 key={report.id}
                 className="panel panel-hover mb-2 space-y-2 p-4 text-sm transition-colors hover:border-primary/25"
               >
-                <p className="text-xs font-medium text-muted-foreground">
-                  {formatDate(report.created_at)}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={report.scope === "geral" ? "default" : "secondary"}>
+                    {report.scope === "geral" ? "Relatório geral" : "Avaliação individual"}
+                  </Badge>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {formatDate(report.created_at)}
+                  </span>
+                </div>
                 {report.content && (
                   <p>
                     <span className="font-medium">Conteúdo: </span>
@@ -309,11 +359,7 @@ function StudentDetail() {
                 {(() => {
                   const lesson = lessons.find((item) => item.id === report.lesson_id);
                   return lesson ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => shell.openReport(withStudent(lesson))}
-                    >
+                    <Button variant="outline" size="sm" onClick={() => shell.openReport(lesson)}>
                       <Pencil className="h-4 w-4" /> Editar relatório
                     </Button>
                   ) : null;
@@ -383,17 +429,62 @@ function StudentDetail() {
         </TabsContent>
       </Tabs>
 
-      <StudentPaymentDialog student={student} open={paymentOpen} onOpenChange={setPaymentOpen} />
+      <StudentPaymentDialog
+        student={student}
+        programs={programs}
+        open={paymentOpen}
+        onOpenChange={setPaymentOpen}
+      />
     </div>
   );
 }
 
+function billingLabel(billingType: string) {
+  if (billingType === "aula_avulsa") return "Aula avulsa";
+  if (billingType === "pacote") return "Pacote";
+  return "Mensalidade";
+}
+
+function formatMoney(amount: number) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(amount);
+}
+
+function participantSummary(lesson: LessonWithStudent) {
+  const names = lesson.participants.map((participant) => participant.student.name.split(" ")[0]);
+  const summary = names.length <= 3 ? names.join(", ") : `${names.slice(0, 2).join(", ")} e mais`;
+  return `${names.length} participantes: ${summary}`;
+}
+
+function categoryForProgram(program?: StudentProgram) {
+  if (program?.billing_type === "aula_avulsa") return "aula_avulsa" as const;
+  if (program?.billing_type === "pacote") return "pacote" as const;
+  return "mensalidade" as const;
+}
+
+function chargeDescription(program: StudentProgram) {
+  if (program.billing_type === "pacote") {
+    const quantity = program.package_lessons ? ` de ${program.package_lessons} aulas` : "";
+    return `Pacote${quantity} - ${program.instrument}`;
+  }
+  if (program.billing_type === "aula_avulsa") return `Aula avulsa - ${program.instrument}`;
+  return `Mensalidade - ${program.instrument}`;
+}
+
+function dueDateForCurrentMonth(dueDay?: number | null) {
+  const now = new Date();
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const day = Math.min(Math.max(dueDay ?? now.getDate(), 1), lastDay);
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 function StudentPaymentDialog({
   student,
+  programs,
   open,
   onOpenChange,
 }: {
   student: Student;
+  programs: StudentProgram[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -401,6 +492,7 @@ function StudentPaymentDialog({
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [dueDate, setDueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [programId, setProgramId] = useState("");
   const [category, setCategory] = useState<"mensalidade" | "aula_avulsa" | "pacote" | "outros">(
     "mensalidade",
   );
@@ -410,12 +502,30 @@ function StudentPaymentDialog({
 
   useEffect(() => {
     if (!open) return;
-    setDescription(`Mensalidade - ${student.instrument || "Aulas de música"}`);
-    setAmount("");
-    setDueDate(new Date().toISOString().slice(0, 10));
-    setCategory("mensalidade");
+    const initialProgram = programs.find((program) => program.is_primary) ?? programs[0];
+    setProgramId(initialProgram?.id ?? "");
+    setDescription(
+      initialProgram
+        ? chargeDescription(initialProgram)
+        : `Mensalidade - ${student.instrument || "Aulas de música"}`,
+    );
+    setAmount(
+      initialProgram?.amount === null || !initialProgram ? "" : String(initialProgram.amount),
+    );
+    setDueDate(dueDateForCurrentMonth(initialProgram?.due_day));
+    setCategory(categoryForProgram(initialProgram));
     setPaymentMethod("pix");
-  }, [open, student.instrument]);
+  }, [open, programs, student.instrument]);
+
+  const selectProgram = (nextProgramId: string) => {
+    setProgramId(nextProgramId);
+    const program = programs.find((item) => item.id === nextProgramId);
+    if (!program) return;
+    setDescription(chargeDescription(program));
+    setAmount(program.amount === null ? "" : String(program.amount));
+    setCategory(categoryForProgram(program));
+    setDueDate(dueDateForCurrentMonth(program.due_day));
+  };
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -436,6 +546,8 @@ function StudentPaymentDialog({
         status: "pendente",
         payment_method: paymentMethod,
         due_date: dueDate,
+        competence_date: `${dueDate.slice(0, 7)}-01`,
+        student_program_id: programId || null,
         paid_at: null,
       },
       {
@@ -455,6 +567,24 @@ function StudentPaymentDialog({
           <DialogTitle>Lançar cobrança para {student.name}</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="space-y-4">
+          {programs.length > 1 && (
+            <div className="space-y-2">
+              <Label htmlFor="charge-program">Instrumento / plano</Label>
+              <select
+                id="charge-program"
+                value={programId}
+                onChange={(event) => selectProgram(event.target.value)}
+                className="h-10 w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {programs.map((program) => (
+                  <option key={program.id} value={program.id}>
+                    {program.instrument} · {billingLabel(program.billing_type)}
+                    {program.is_primary ? " (principal)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="charge-description">Descrição</Label>
             <Input

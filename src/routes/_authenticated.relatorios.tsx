@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
 import {
   BarChart3,
   Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
-  Download,
   FileSpreadsheet,
   FileText,
   Music4,
@@ -30,36 +32,97 @@ export const Route = createFileRoute("/_authenticated/relatorios")({
 });
 
 function RelatoriosPage() {
-  const { data: lessons = [] } = useLessons();
-  const { data: students = [] } = useStudents();
-  const { data: transactions = [] } = useFinancialTransactions();
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [month, setMonth] = useState(currentMonth);
+  const [year, monthNumber] = month.split("-").map(Number);
+  const monthRange = {
+    from: new Date(year!, monthNumber! - 1, 1),
+    to: new Date(year!, monthNumber!, 1),
+  };
 
-  const totalMinutesTaught = lessons
-    .filter((l) => l.status === "realizada")
-    .reduce((acc, l) => acc + (l.duration_minutes || 60), 0);
+  const { data: lessons = [] } = useLessons(monthRange);
+  const { data: students = [] } = useStudents();
+  const { data: transactions = [] } = useFinancialTransactions(month);
+
+  const realizedLessons = lessons.filter((lesson) => lesson.status === "realizada");
+
+  const totalMinutesTaught = realizedLessons.reduce(
+    (acc, lesson) => acc + (lesson.duration_minutes || 60),
+    0,
+  );
   const totalHoursTaught = (totalMinutesTaught / 60).toFixed(1);
 
   const activeStudents = students.filter((s) => s.status === "ativo").length;
   const pausedStudents = students.filter((s) => s.status === "pausado").length;
   const inactiveStudents = students.filter((s) => s.status === "inativo").length;
 
-  const totalRealizedLessons = lessons.filter((l) => l.status === "realizada").length;
+  const totalRealizedLessons = realizedLessons.length;
   const totalCancelledLessons = lessons.filter((l) => l.status === "cancelada").length;
-  const totalLessons = lessons.length || 1;
-  const presenceRate = Math.round((totalRealizedLessons / totalLessons) * 100);
+  const assessedAttendances = realizedLessons
+    .flatMap((lesson) => lesson.participants)
+    .filter((participant) => participant.attendance !== "pendente");
+  const presenceRate = assessedAttendances.length
+    ? Math.round(
+        (assessedAttendances.filter((participant) => participant.attendance === "presente").length /
+          assessedAttendances.length) *
+          100,
+      )
+    : lessons.length
+      ? Math.round((totalRealizedLessons / lessons.length) * 100)
+      : 0;
+
+  const totalParticipations = realizedLessons.reduce((total, lesson) => {
+    if (lesson.participants.length > 0) {
+      return total + new Set(lesson.participants.map((participant) => participant.student_id)).size;
+    }
+    return total + (lesson.student_id ? 1 : 0);
+  }, 0);
 
   const totalRevenue = (transactions as FinancialTransaction[])
     .filter((t) => t.type === "receita" && t.status === "pago")
     .reduce((acc, t) => acc + t.amount, 0);
 
-  const instrumentsCount = students.reduce(
-    (acc, s) => {
-      const inst = s.instrument || "Outro";
-      acc[inst] = (acc[inst] || 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
+  const studentsById = new Map(students.map((student) => [student.id, student]));
+  const instrumentStudents = new Map<string, Set<string>>();
+
+  for (const lesson of realizedLessons) {
+    if (lesson.participants.length > 0) {
+      for (const participant of lesson.participants) {
+        const instrument =
+          participant.program?.instrument ||
+          participant.student?.instrument ||
+          studentsById.get(participant.student_id)?.instrument ||
+          "Outro";
+        const studentIds = instrumentStudents.get(instrument) ?? new Set<string>();
+        studentIds.add(participant.student_id);
+        instrumentStudents.set(instrument, studentIds);
+      }
+      continue;
+    }
+
+    if (lesson.student_id) {
+      const instrument =
+        lesson.student?.instrument || studentsById.get(lesson.student_id)?.instrument || "Outro";
+      const studentIds = instrumentStudents.get(instrument) ?? new Set<string>();
+      studentIds.add(lesson.student_id);
+      instrumentStudents.set(instrument, studentIds);
+    }
+  }
+
+  const instrumentsCount = Array.from(
+    instrumentStudents,
+    ([instrument, studentIds]) => [instrument, studentIds.size] as const,
   );
+  const totalInstrumentEnrollments = instrumentsCount.reduce(
+    (total, [, count]) => total + count,
+    0,
+  );
+
+  const changeMonth = (offset: number) => {
+    const nextMonth = new Date(year!, monthNumber! - 1 + offset, 1);
+    setMonth(`${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}`);
+  };
 
   const exportReport = (type: "PDF" | "Excel") => {
     toast.success(`Relatório em formato ${type} gerado com sucesso!`);
@@ -69,9 +132,37 @@ function RelatoriosPage() {
     <div className="space-y-4 animate-fade-up sm:space-y-5">
       <PageHeader
         title="Relatórios Gerenciais"
-        description="Métricas de desempenho, horas de aula ministradas e frequência de alunos."
+        description={`Métricas de desempenho, horas e frequência em ${monthRange.from.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}.`}
         actions={
           <>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Mês anterior"
+              title="Mês anterior"
+              onClick={() => changeMonth(-1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <input
+              type="month"
+              value={month}
+              aria-label="Mês do relatório"
+              onChange={(event) => event.target.value && setMonth(event.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Próximo mês"
+              title="Próximo mês"
+              onClick={() => changeMonth(1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setMonth(currentMonth)}>
+              Hoje
+            </Button>
             <Button variant="outline" size="sm" onClick={() => exportReport("Excel")}>
               <FileSpreadsheet className="h-4 w-4" /> Exportar Excel
             </Button>
@@ -85,19 +176,24 @@ function RelatoriosPage() {
       {/* Top Metrics Cards */}
       <section className="stagger grid grid-cols-2 gap-3 xl:grid-cols-4">
         <StatCard
-          label="Total de Horas Aulas"
+          label="Horas Ministradas"
           value={`${totalHoursTaught}h`}
           icon={Clock}
           tone="primary"
         />
-        <StatCard label="Alunos Ativos" value={activeStudents} icon={Users} tone="success" />
+        <StatCard
+          label="Sessões Realizadas"
+          value={totalRealizedLessons}
+          icon={Calendar}
+          tone="success"
+        />
+        <StatCard label="Participações" value={totalParticipations} icon={Users} tone="info" />
         <StatCard
           label="Taxa de Presença"
           value={`${presenceRate}%`}
           icon={CheckCircle2}
-          tone="info"
+          tone="muted"
         />
-        <StatCard label="Aulas Registradas" value={lessons.length} icon={Calendar} tone="muted" />
       </section>
 
       {/* Relatórios Detalhados */}
@@ -109,16 +205,16 @@ function RelatoriosPage() {
           </h2>
 
           <div className="mt-4 space-y-3">
-            {Object.keys(instrumentsCount).length === 0 ? (
+            {instrumentsCount.length === 0 ? (
               <EmptyState
                 illustration="music"
-                title="Nenhum aluno cadastrado"
-                description="Cadastre alunos para ver a distribuição por instrumento."
+                title="Nenhuma participação realizada"
+                description="As participações em aulas realizadas aparecerão aqui."
                 className="py-8"
               />
             ) : (
-              Object.entries(instrumentsCount).map(([inst, count]) => {
-                const percent = Math.round((count / (students.length || 1)) * 100);
+              instrumentsCount.map(([inst, count]) => {
+                const percent = Math.round((count / totalInstrumentEnrollments) * 100);
                 return (
                   <div key={inst} className="space-y-1.5">
                     <div className="flex items-center justify-between text-sm">
@@ -177,6 +273,10 @@ function RelatoriosPage() {
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Matrículas ativas</span>
               <strong className="font-semibold tabular-nums">{activeStudents}</strong>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Aulas registradas no mês</span>
+              <strong className="font-semibold tabular-nums">{lessons.length}</strong>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Aulas canceladas</span>

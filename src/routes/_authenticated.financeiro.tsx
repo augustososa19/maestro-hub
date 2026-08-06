@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Clock,
   DollarSign,
@@ -13,13 +15,17 @@ import {
   Check,
   Trash2,
   Loader2,
+  UploadCloud,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import {
   useAddFinancialTransaction,
   useFinancialTransactions,
   useUpdateFinancialTransaction,
   useDeleteFinancialTransaction,
+  useInvalidateAll,
   useStudents,
 } from "@/hooks/useMusicData";
 import type { FinancialTransaction } from "@/lib/domain";
@@ -49,7 +55,10 @@ export const Route = createFileRoute("/_authenticated/financeiro")({
 });
 
 function FinanceiroPage() {
-  const { data: transactions = [] } = useFinancialTransactions();
+  const { user } = useAuth();
+  const invalidate = useInvalidateAll();
+  const [month, setMonth] = useState(getCurrentMonth);
+  const { data: transactions = [] } = useFinancialTransactions(month);
   const { data: students = [] } = useStudents();
   const addTransaction = useAddFinancialTransaction();
   const updateTransaction = useUpdateFinancialTransaction();
@@ -59,13 +68,71 @@ function FinanceiroPage() {
     "todos",
   );
   const [openModal, setOpenModal] = useState(false);
+  const [legacyTransactions, setLegacyTransactions] = useState<FinancialTransaction[]>([]);
+  const [importingLegacy, setImportingLegacy] = useState(false);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("maestro_transactions");
+    if (!stored) return;
+    try {
+      const parsed = JSON.parse(stored) as Partial<FinancialTransaction>[];
+      if (!Array.isArray(parsed)) return;
+      const demoIds = new Set(["tx-1", "tx-2", "tx-3", "tx-4", "tx-5"]);
+      setLegacyTransactions(
+        parsed.filter(
+          (item): item is FinancialTransaction =>
+            typeof item.id === "string" &&
+            !demoIds.has(item.id) &&
+            typeof item.description === "string" &&
+            typeof item.amount === "number" &&
+            typeof item.due_date === "string",
+        ),
+      );
+    } catch {
+      setLegacyTransactions([]);
+    }
+  }, []);
+
+  const importLegacyTransactions = async () => {
+    if (!user || legacyTransactions.length === 0) return;
+    setImportingLegacy(true);
+    const rows = legacyTransactions.map((transaction) => ({
+      teacher_id: user.id,
+      student_id: transaction.student_id ?? null,
+      student_program_id: transaction.student_program_id ?? null,
+      student_name: transaction.student_name ?? null,
+      description: transaction.description,
+      amount: transaction.amount,
+      type: transaction.type,
+      category: transaction.category,
+      status: transaction.status,
+      payment_method: transaction.payment_method,
+      competence_date: transaction.competence_date || `${transaction.due_date.slice(0, 7)}-01`,
+      due_date: transaction.due_date,
+      paid_at: transaction.paid_at ?? null,
+      source_key: `legacy:${transaction.id}`,
+    }));
+    const { error } = await supabase
+      .from("financial_transactions")
+      .upsert(rows, { onConflict: "teacher_id,source_key", ignoreDuplicates: true });
+    setImportingLegacy(false);
+    if (error) {
+      toast.error(getErrorMessage(error, "Não foi possível importar os lançamentos antigos."));
+      return;
+    }
+    localStorage.removeItem("maestro_transactions");
+    setLegacyTransactions([]);
+    invalidate();
+    toast.success("Lançamentos antigos importados para o financeiro.");
+  };
 
   const markAsPaid = (tx: FinancialTransaction) => {
     updateTransaction.mutate(
       { id: tx.id, status: "pago", paid_at: new Date().toISOString() },
       {
         onSuccess: () => toast.success("Lançamento marcado como pago."),
-        onError: () => toast.error("Não foi possível atualizar o lançamento."),
+        onError: (error) =>
+          toast.error(getErrorMessage(error, "Não foi possível atualizar o lançamento.")),
       },
     );
   };
@@ -73,7 +140,8 @@ function FinanceiroPage() {
   const removeTransaction = (tx: FinancialTransaction) => {
     deleteTransaction.mutate(tx.id, {
       onSuccess: () => toast.success("Lançamento excluído."),
-      onError: () => toast.error("Não foi possível excluir o lançamento."),
+      onError: (error) =>
+        toast.error(getErrorMessage(error, "Não foi possível excluir o lançamento.")),
     });
   };
 
@@ -87,8 +155,13 @@ function FinanceiroPage() {
   const [paymentMethod, setPaymentMethod] = useState<
     "pix" | "dinheiro" | "cartao" | "transferencia"
   >("pix");
-  const [studentName, setStudentName] = useState("");
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [studentId, setStudentId] = useState("");
+  const [dueDate, setDueDate] = useState(() => getDefaultDueDate(getCurrentMonth()));
+
+  const openTransactionModal = () => {
+    setDueDate(getDefaultDueDate(month));
+    setOpenModal(true);
+  };
 
   // Calculations
   const totalReceitaRecebida = (transactions as FinancialTransaction[])
@@ -120,6 +193,7 @@ function FinanceiroPage() {
     }
 
     const toastId = toast.loading("Salvando lançamento...");
+    const selectedStudent = students.find((student) => student.id === studentId);
 
     addTransaction.mutate(
       {
@@ -128,8 +202,10 @@ function FinanceiroPage() {
         type,
         category,
         payment_method: paymentMethod,
-        student_name: studentName || null,
-        due_date: dueDate || new Date().toISOString().slice(0, 10),
+        student_id: selectedStudent?.id ?? null,
+        student_name: selectedStudent?.name ?? null,
+        competence_date: `${month}-01`,
+        due_date: dueDate || getDefaultDueDate(month),
         status: "pendente",
       },
       {
@@ -138,10 +214,12 @@ function FinanceiroPage() {
           setOpenModal(false);
           setDescription("");
           setAmount("");
-          setStudentName("");
+          setStudentId("");
         },
-        onError: () => {
-          toast.error("Não foi possível adicionar o lançamento.", { id: toastId });
+        onError: (error) => {
+          toast.error(getErrorMessage(error, "Não foi possível adicionar o lançamento."), {
+            id: toastId,
+          });
         },
       },
     );
@@ -153,11 +231,72 @@ function FinanceiroPage() {
         title="Financeiro"
         description="Controle de mensalidades, faturamento, despesas e pendências."
         actions={
-          <Button size="sm" onClick={() => setOpenModal(true)}>
-            <Plus className="h-4 w-4" /> Novo Lançamento
-          </Button>
+          <>
+            <div className="flex items-center rounded-md border border-border bg-background">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-r-none"
+                aria-label="Mês anterior"
+                title="Mês anterior"
+                onClick={() => setMonth((current) => shiftMonth(current, -1))}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-36 px-2 text-center text-sm font-medium capitalize">
+                {formatMonth(month)}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-l-none"
+                aria-label="Próximo mês"
+                title="Próximo mês"
+                onClick={() => setMonth((current) => shiftMonth(current, 1))}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={month === getCurrentMonth()}
+              onClick={() => setMonth(getCurrentMonth())}
+            >
+              Hoje
+            </Button>
+            <Button size="sm" onClick={openTransactionModal}>
+              <Plus className="h-4 w-4" /> Novo Lançamento
+            </Button>
+          </>
         }
       />
+
+      {legacyTransactions.length > 0 && (
+        <section className="panel flex flex-col gap-3 border-primary/25 bg-primary/[0.03] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">Lançamentos antigos encontrados</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              Importe {legacyTransactions.length} registro
+              {legacyTransactions.length === 1 ? "" : "s"} salvo
+              {legacyTransactions.length === 1 ? "" : "s"} neste dispositivo para o Supabase.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={importingLegacy}
+            onClick={importLegacyTransactions}
+          >
+            {importingLegacy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <UploadCloud className="h-4 w-4" />
+            )}
+            Importar
+          </Button>
+        </section>
+      )}
 
       {/* Cards Financeiros */}
       <section className="stagger grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
@@ -430,13 +569,13 @@ function FinanceiroPage() {
               <Label htmlFor="st">Aluno (Opcional)</Label>
               <select
                 id="st"
-                value={studentName}
-                onChange={(e) => setStudentName(e.target.value)}
+                value={studentId}
+                onChange={(e) => setStudentId(e.target.value)}
                 className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="">Nenhum / Cliente Geral</option>
                 {students.map((s) => (
-                  <option key={s.id} value={s.name}>
+                  <option key={s.id} value={s.id}>
                     {s.name} ({s.instrument})
                   </option>
                 ))}
@@ -493,4 +632,39 @@ function FinanceiroPage() {
 
 function formatMoney(value: number) {
   return `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+}
+
+function getCurrentMonth() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function shiftMonth(month: string, amount: number) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const date = new Date(year!, monthNumber! - 1 + amount, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonth(month: string) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  return new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric" }).format(
+    new Date(year!, monthNumber! - 1, 1),
+  );
+}
+
+function getDefaultDueDate(month: string) {
+  const now = new Date();
+  if (month === getCurrentMonth()) {
+    return `${month}-${String(now.getDate()).padStart(2, "0")}`;
+  }
+  return `${month}-05`;
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "object" && error && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return fallback;
 }

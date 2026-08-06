@@ -13,7 +13,15 @@ import { useLessons, useStudents } from "@/hooks/useMusicData";
 import { useShell } from "@/components/app/shell-context";
 import { RemindersPanel } from "@/components/app/RemindersPanel";
 import { formatTime, formatWeekdayLong, relative } from "@/lib/dates";
-import { initials, labelOf, LESSON_TYPES, type LessonWithStudent } from "@/lib/domain";
+import {
+  initials,
+  labelOf,
+  lessonInstrumentLabel,
+  lessonStudentLabel,
+  lessonStudents,
+  LESSON_TYPES,
+  type LessonWithStudent,
+} from "@/lib/domain";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -52,10 +60,17 @@ function Dashboard() {
     return d >= now && d <= weekEnd && l.status !== "cancelada";
   });
   const upcoming = week[0] ?? null;
+  const upcomingStudents = upcoming ? lessonStudents(upcoming) : [];
+  const upcomingPrimary = upcomingStudents[0];
   const activeStudents = students.filter((s) => s.status === "ativo");
-  const doneThisMonth = lessons.filter(
-    (l) => l.status === "realizada" && new Date(l.starts_at).getMonth() === now.getMonth(),
-  );
+  const doneThisMonth = lessons.filter((l) => {
+    const date = new Date(l.starts_at);
+    return (
+      l.status === "realizada" &&
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear()
+    );
+  });
 
   return (
     <div className="space-y-4 animate-fade-up sm:space-y-5">
@@ -153,15 +168,19 @@ function Dashboard() {
               <div className="flex min-w-0 items-center gap-3">
                 <Avatar className="h-11 w-11 shrink-0 ring-1 ring-border">
                   <AvatarImage
-                    src={upcoming.student?.photo_url ?? undefined}
-                    alt={upcoming.student?.name ?? ""}
+                    src={upcomingPrimary?.photo_url ?? undefined}
+                    alt={lessonStudentLabel(upcoming)}
                   />
-                  <AvatarFallback>{initials(upcoming.student?.name ?? "?")}</AvatarFallback>
+                  <AvatarFallback>
+                    {upcomingStudents.length > 1
+                      ? upcomingStudents.length
+                      : initials(upcomingPrimary?.name ?? "?")}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{upcoming.student?.name ?? "Aula"}</p>
+                  <p className="truncate font-medium">{lessonStudentLabel(upcoming)}</p>
                   <p className="truncate text-sm text-muted-foreground">
-                    {upcoming.student?.instrument} · {upcoming.duration_minutes} min
+                    {lessonInstrumentLabel(upcoming)} · {upcoming.duration_minutes} min
                   </p>
                 </div>
               </div>
@@ -177,9 +196,9 @@ function Dashboard() {
                 <Badge variant="secondary">{labelOf(LESSON_TYPES, upcoming.lesson_type)}</Badge>
                 {upcoming.location && <Badge variant="outline">{upcoming.location}</Badge>}
               </div>
-              {upcoming.student && (
+              {upcomingStudents.length === 1 && upcomingPrimary && (
                 <Button variant="outline" size="sm" asChild className="w-full">
-                  <Link to="/alunos/$id" params={{ id: upcoming.student.id }}>
+                  <Link to="/alunos/$id" params={{ id: upcomingPrimary.id }}>
                     Abrir perfil do aluno
                   </Link>
                 </Button>
@@ -213,6 +232,8 @@ function LessonRow({
   onOpen: () => void;
   onReport: () => void;
 }) {
+  const students = lessonStudents(lesson);
+  const primary = students[0];
   return (
     <li className="panel-hover group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border bg-surface p-2.5 transition-colors hover:border-primary/25 hover:bg-accent/40">
       <button
@@ -224,16 +245,13 @@ function LessonRow({
           {formatTime(lesson.starts_at)}
         </span>
         <Avatar className="h-8 w-8 shrink-0">
-          <AvatarImage
-            src={lesson.student?.photo_url ?? undefined}
-            alt={lesson.student?.name ?? ""}
-          />
-          <AvatarFallback>{initials(lesson.student?.name ?? "?")}</AvatarFallback>
+          <AvatarImage src={primary?.photo_url ?? undefined} alt={lessonStudentLabel(lesson)} />
+          <AvatarFallback>
+            {students.length > 1 ? students.length : initials(primary?.name ?? "?")}
+          </AvatarFallback>
         </Avatar>
         <span className="min-w-0">
-          <span className="block truncate text-sm font-medium">
-            {lesson.student?.name ?? "Aula"}
-          </span>
+          <span className="block truncate text-sm font-medium">{lessonStudentLabel(lesson)}</span>
           <span className="block truncate text-xs text-muted-foreground">
             {labelOf(LESSON_TYPES, lesson.lesson_type)} · {lesson.duration_minutes} min
           </span>

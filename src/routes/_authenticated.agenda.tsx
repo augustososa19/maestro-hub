@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { CalendarOff, ChevronLeft, ChevronRight, Plus, Copy } from "lucide-react";
+import { addMonths, subMonths } from "date-fns";
 import { useLessons } from "@/hooks/useMusicData";
 import { useShell } from "@/components/app/shell-context";
 import {
@@ -39,7 +40,6 @@ function Agenda() {
   const shell = useShell();
   const [anchor, setAnchor] = useState(new Date());
   const [view, setView] = useState<View>("semana");
-  const { data: lessons = [] } = useLessons();
 
   const days = useMemo(() => {
     if (view === "semana") return weekDays(anchor);
@@ -47,15 +47,33 @@ function Agenda() {
     return monthGrid(anchor);
   }, [anchor, view]);
 
+  const lessonRange = useMemo(() => {
+    const from = new Date(days[0]!);
+    from.setHours(0, 0, 0, 0);
+    const to = addDays(new Date(days[days.length - 1]!), 1);
+    to.setHours(0, 0, 0, 0);
+    return { from, to };
+  }, [days]);
+
+  const { data: lessons = [] } = useLessons(lessonRange);
+
   const lessonsOf = (day: Date) =>
     lessons
       .filter((l) => isSameDay(new Date(l.starts_at), day))
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
 
   const shift = (dir: number) => {
-    setAnchor((d) =>
-      view === "mes" ? addDays(d, dir * 7) : addDays(d, view === "semana" ? dir * 7 : dir),
-    );
+    setAnchor((date) => {
+      if (view === "mes") return dir > 0 ? addMonths(date, 1) : subMonths(date, 1);
+      return addDays(date, view === "semana" ? dir * 7 : dir);
+    });
+  };
+
+  const selectMonth = (value: string) => {
+    if (!value) return;
+    const [year, month] = value.split("-").map(Number);
+    if (year === undefined || month === undefined) return;
+    setAnchor(new Date(year, month - 1, 1));
   };
 
   const goToday = () => {
@@ -101,6 +119,16 @@ function Agenda() {
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
+            <label className="relative">
+              <span className="sr-only">Selecionar mês e ano</span>
+              <input
+                type="month"
+                value={monthInputValue(anchor)}
+                onChange={(event) => selectMonth(event.currentTarget.value)}
+                aria-label="Selecionar mês e ano"
+                className="h-9 w-[9.5rem] rounded-lg border border-border bg-surface px-2 text-xs font-medium text-foreground outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </label>
             <Segmented
               value={view}
               onChange={setView}
@@ -243,10 +271,10 @@ function MonthView({
                           ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
                           : "bg-primary/15 text-primary",
                     )}
-                    title={`${lesson.student?.name ?? "Aula"} · ${formatTime(lesson.starts_at)}`}
+                    title={`${participantSummary(lesson)} · ${formatTime(lesson.starts_at)}`}
                   >
                     <span className="font-semibold">{formatTime(lesson.starts_at)}</span>{" "}
-                    <span className="hidden lg:inline">{lesson.student?.name ?? "Aula"}</span>
+                    <span className="hidden lg:inline">{participantSummary(lesson)}</span>
                   </div>
                 ))}
                 {items.length > 2 && (
@@ -414,7 +442,7 @@ function LessonCard({
           cancelled && "line-through",
         )}
       >
-        {lesson.student?.name ?? "Aula"}
+        {participantSummary(lesson)}
       </p>
       <div className="mt-1.5 flex flex-wrap gap-1">
         <Badge variant={done ? "secondary" : "outline"} className="text-[10px]">
@@ -429,4 +457,21 @@ function atNine(day: Date) {
   const start = new Date(day);
   start.setHours(9, 0, 0, 0);
   return start;
+}
+
+function monthInputValue(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function participantSummary(lesson: LessonWithStudent) {
+  const participants = lesson.participants ?? [];
+  if (participants.length > 1) {
+    const firstNames = participants
+      .map((participant) => participant.student?.name.trim().split(/\s+/)[0])
+      .filter(Boolean);
+    return participants.length <= 3 && firstNames.length === participants.length
+      ? firstNames.join(", ")
+      : `${participants.length} alunos`;
+  }
+  return participants[0]?.student?.name ?? lesson.student?.name ?? "Aula";
 }

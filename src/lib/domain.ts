@@ -7,8 +7,44 @@ export type Material = Tables<"materials">;
 export type Availability = Tables<"availability">;
 export type BlockedDate = Tables<"blocked_dates">;
 export type Profile = Tables<"profiles">;
+export type StudentProgram = Tables<"student_programs">;
+export type LessonParticipant = Tables<"lesson_participants">;
 
-export type LessonWithStudent = Lesson & { student: Pick<Student, "id" | "name" | "photo_url" | "instrument"> | null };
+export type LessonParticipantWithStudent = LessonParticipant & {
+  student: Pick<Student, "id" | "name" | "photo_url" | "instrument">;
+  program: Pick<StudentProgram, "id" | "instrument"> | null;
+};
+
+export type LessonWithStudent = Lesson & {
+  student: Pick<Student, "id" | "name" | "photo_url" | "instrument"> | null;
+  participants: LessonParticipantWithStudent[];
+};
+
+export function lessonStudents(lesson: LessonWithStudent) {
+  const participants = lesson.participants?.map((participant) => participant.student) ?? [];
+  if (participants.length > 0) return participants;
+  return lesson.student ? [lesson.student] : [];
+}
+
+export function lessonStudentLabel(lesson: LessonWithStudent) {
+  const students = lessonStudents(lesson);
+  if (students.length === 0) return "Aula";
+  if (students.length === 1) return students[0]!.name;
+  if (students.length === 2) return students.map((student) => student.name).join(" e ");
+  return `${students[0]!.name}, ${students[1]!.name} +${students.length - 2}`;
+}
+
+export function lessonInstrumentLabel(lesson: LessonWithStudent) {
+  const instruments = [
+    ...new Set(
+      lesson.participants
+        ?.map((participant) => participant.program?.instrument ?? participant.student.instrument)
+        .filter(Boolean) ?? [],
+    ),
+  ];
+  if (instruments.length > 0) return instruments.join(", ");
+  return lesson.student?.instrument ?? "Música";
+}
 
 export const LESSON_TYPES = [
   { value: "presencial", label: "Presencial" },
@@ -119,15 +155,24 @@ export function isWithinAvailability(
   if (availability.length === 0) return { ok: true };
 
   const slots = availability.filter((a) => a.weekday === start.getDay());
-  if (slots.length === 0) return { ok: false, reason: "Você não atende nesse dia da semana. Configure sua disponibilidade em Configurações." };
+  if (slots.length === 0)
+    return {
+      ok: false,
+      reason:
+        "Você não atende nesse dia da semana. Configure sua disponibilidade em Configurações.",
+    };
 
   const startMin = start.getHours() * 60 + start.getMinutes();
   const endMin = startMin + durationMinutes;
   const end = new Date(start.getTime() + durationMinutes * 60000);
 
-  const fits = slots.some((s) => startMin >= toMinutes(s.start_time) && endMin <= toMinutes(s.end_time));
+  const fits = slots.some(
+    (s) => startMin >= toMinutes(s.start_time) && endMin <= toMinutes(s.end_time),
+  );
   if (!fits) {
-    const windows = slots.map((s) => `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`).join(", ");
+    const windows = slots
+      .map((s) => `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`)
+      .join(", ");
     return { ok: false, reason: `Fora dos horários disponíveis (${windows}).` };
   }
   if (end.getDate() !== start.getDate()) return { ok: false, reason: "A aula ultrapassa o dia." };
@@ -158,7 +203,9 @@ export function fromDateTimeInput(date: string, time: string) {
 
 export type FinancialTransaction = {
   id: string;
+  teacher_id?: string;
   student_id?: string | null;
+  student_program_id?: string | null;
   student_name?: string | null;
   description: string;
   amount: number;
@@ -166,8 +213,10 @@ export type FinancialTransaction = {
   category: "mensalidade" | "aula_avulsa" | "pacote" | "equipamento" | "outros";
   status: "pago" | "pendente" | "atrasado";
   payment_method: "pix" | "dinheiro" | "cartao" | "transferencia";
+  competence_date: string;
   due_date: string;
   paid_at?: string | null;
+  source_key?: string | null;
 };
 
 export type CurriculumModule = {
@@ -205,10 +254,13 @@ export const DEFAULT_CURRICULUM_MODULES: CurriculumModule[] = [
     title: "Módulo 3: Repertório & Expressão",
     level: "Avançado",
     topics: [
-      { id: "t9", title: "Repertório Solo & Técnicas Avançadas (Bend, Slide, Legato)", completed: false },
+      {
+        id: "t9",
+        title: "Repertório Solo & Técnicas Avançadas (Bend, Slide, Legato)",
+        completed: false,
+      },
       { id: "t10", title: "Modos Gregos (Jônio, Dórico, Miódio...)", completed: false },
       { id: "t11", title: "Arranjos Próprios & Interpretação Musical", completed: false },
     ],
   },
 ];
-

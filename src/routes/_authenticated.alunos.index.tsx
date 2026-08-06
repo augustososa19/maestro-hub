@@ -54,7 +54,8 @@ function StudentsPage() {
     return lessons
       .filter(
         (l) =>
-          l.student_id === studentId &&
+          (l.student_id === studentId ||
+            l.participants.some((participant) => participant.student_id === studentId)) &&
           new Date(l.starts_at).getTime() >= now &&
           l.status !== "cancelada",
       )

@@ -7,6 +7,7 @@ import {
   useAvailability,
   useBlockedDates,
   useInvalidateAll,
+  useStudentPrograms,
   useStudents,
 } from "@/hooks/useMusicData";
 import {
@@ -20,6 +21,7 @@ import {
   type LessonWithStudent,
 } from "@/lib/domain";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +48,11 @@ export type LessonDraft = {
   duplicate?: boolean;
 };
 
+type ParticipantDraft = {
+  studentId: string;
+  programId?: string | undefined;
+};
+
 export function LessonDialog({
   draft,
   onOpenChange,
@@ -56,13 +63,14 @@ export function LessonDialog({
   const { user } = useAuth();
   const invalidate = useInvalidateAll();
   const { data: students = [] } = useStudents();
+  const { data: studentPrograms = [] } = useStudentPrograms();
   const { data: availability = [] } = useAvailability();
   const { data: blocks = [] } = useBlockedDates();
 
   const [duplicating, setDuplicating] = useState(false);
   const editing = !!draft?.lesson && !draft.duplicate && !duplicating;
   const [saving, setSaving] = useState(false);
-  const [studentId, setStudentId] = useState("");
+  const [participants, setParticipants] = useState<ParticipantDraft[]>([]);
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [duration, setDuration] = useState("60");
@@ -82,12 +90,23 @@ export function LessonDialog({
     if (!draft) return;
     const base = draft.lesson;
     const start = base ? new Date(base.starts_at) : (draft.startsAt ?? nextHour());
-    setStudentId(base?.student_id ?? draft.studentId ?? "");
+    setParticipants(
+      base?.participants?.length
+        ? base.participants.map((participant) => ({
+            studentId: participant.student_id,
+            programId: participant.student_program_id ?? undefined,
+          }))
+        : base?.student_id
+          ? [{ studentId: base.student_id }]
+          : draft.studentId
+            ? [{ studentId: draft.studentId }]
+            : [],
+    );
     setDate(toDateInput(start));
     setTime(toTimeInput(start));
     setDuration(String(base?.duration_minutes ?? 60));
     setType(base?.lesson_type ?? "presencial");
-    setStatus(base?.status ?? "agendada");
+    setStatus(draft.duplicate ? "agendada" : (base?.status ?? "agendada"));
     setLocation(base?.location ?? "");
     setNotes(draft.duplicate ? (base?.notes ?? "") : (base?.notes ?? ""));
     setShowNewStudent(false);
@@ -96,14 +115,41 @@ export function LessonDialog({
     setDuplicating(!!draft.duplicate);
   }, [draft]);
 
-  const student = useMemo(() => students.find((s) => s.id === studentId), [students, studentId]);
+  const programsByStudent = useMemo(() => {
+    const grouped = new Map<string, typeof studentPrograms>();
+    for (const program of studentPrograms) {
+      grouped.set(program.student_id, [...(grouped.get(program.student_id) ?? []), program]);
+    }
+    return grouped;
+  }, [studentPrograms]);
 
   useEffect(() => {
-    if (!draft || draft.lesson || !student) return;
-    if (student.default_duration) setDuration(String(student.default_duration));
-    setType(student.default_lesson_type);
-    if (student.default_location) setLocation(student.default_location);
-  }, [student, draft]);
+    if (studentPrograms.length === 0) return;
+    setParticipants((current) => {
+      let changed = false;
+      const next = current.map((participant) => {
+        if (participant.programId) return participant;
+        const programs = programsByStudent.get(participant.studentId) ?? [];
+        const program = programs.find((item) => item.is_primary) ?? programs[0];
+        if (!program) return participant;
+        changed = true;
+        return { ...participant, programId: program.id };
+      });
+      return changed ? next : current;
+    });
+  }, [programsByStudent, studentPrograms.length]);
+
+  const firstStudent = useMemo(
+    () => students.find((student) => student.id === participants[0]?.studentId),
+    [students, participants],
+  );
+
+  useEffect(() => {
+    if (!draft || draft.lesson || !firstStudent) return;
+    if (firstStudent.default_duration) setDuration(String(firstStudent.default_duration));
+    setType(firstStudent.default_lesson_type);
+    if (firstStudent.default_location) setLocation(firstStudent.default_location);
+  }, [firstStudent, draft]);
 
   const availabilityCheck = useMemo(() => {
     if (!date || !time) return { ok: true } as const;
@@ -115,39 +161,59 @@ export function LessonDialog({
     );
   }, [date, time, duration, availability, blocks]);
 
-  const createStudent = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const createStudent = async () => {
     if (!user || !newStudentName.trim()) return;
     setSavingStudent(true);
-    const { data, error } = await supabase
-      .from("students")
-      .insert({
-        teacher_id: user.id,
-        name: newStudentName.trim(),
-        whatsapp: newStudentWhatsapp || null,
-        instrument: newStudentInstrument,
-        status: "ativo",
-      })
-      .select()
-      .single();
-    setSavingStudent(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      const { data: studentData, error: studentError } = await supabase
+        .from("students")
+        .insert({
+          teacher_id: user.id,
+          name: newStudentName.trim(),
+          whatsapp: newStudentWhatsapp || null,
+          instrument: newStudentInstrument,
+          status: "ativo",
+        })
+        .select()
+        .single();
+      if (studentError) throw studentError;
+
+      const { data: programData, error: programError } = await supabase
+        .from("student_programs")
+        .insert({
+          teacher_id: user.id,
+          student_id: studentData.id,
+          instrument: newStudentInstrument,
+          is_primary: true,
+        })
+        .select()
+        .single();
+      if (programError) {
+        await supabase.from("students").delete().eq("id", studentData.id);
+        throw programError;
+      }
+
+      toast.success(`Aluno "${newStudentName}" cadastrado!`);
+      await invalidate();
+      setParticipants((current) => [
+        ...current.filter((participant) => participant.studentId !== studentData.id),
+        { studentId: studentData.id, programId: programData.id },
+      ]);
+      setShowNewStudent(false);
+      setNewStudentName("");
+      setNewStudentWhatsapp("");
+    } catch (error) {
+      toast.error(errorMessage(error, "Não foi possível cadastrar o aluno."));
+    } finally {
+      setSavingStudent(false);
     }
-    toast.success(`Aluno "${newStudentName}" cadastrado!`);
-    await invalidate();
-    setStudentId(data.id);
-    setShowNewStudent(false);
-    setNewStudentName("");
-    setNewStudentWhatsapp("");
   };
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (!studentId) {
-      toast.error("Selecione um aluno.");
+    if (participants.length === 0) {
+      toast.error("Selecione ao menos um aluno.");
       return;
     }
     // Bloqueia somente se o professor configurou disponibilidade e o horário está fora
@@ -164,30 +230,36 @@ export function LessonDialog({
     setSaving(true);
     const payload = {
       teacher_id: user.id,
-      student_id: studentId,
+      student_id: participants[0]!.studentId,
       starts_at: fromDateTimeInput(date, time).toISOString(),
       duration_minutes: Number(duration),
       lesson_type: type as never,
-      status: "agendada" as never,
+      status: (editing ? status : "agendada") as never,
       location: location || null,
       notes: notes || null,
     };
-    const query = editing
-      ? supabase.from("lessons").update(payload).eq("id", draft!.lesson!.id)
-      : supabase.from("lessons").insert(payload);
-    const { error } = await query;
-    setSaving(false);
-    if (error) {
-      toast.error(
-        error.message.includes("Conflito") ? "Conflito de horário com outra aula." : error.message,
+    try {
+      const { error } = await supabase.rpc("save_lesson_with_participants", {
+        p_lesson_id: editing ? draft!.lesson!.id : null,
+        p_lesson: payload,
+        p_participants: participants.map((participant) => ({
+          student_id: participant.studentId,
+          student_program_id: participant.programId ?? null,
+        })),
+      });
+      if (error) throw error;
+
+      toast.success(
+        duplicating ? "Aula duplicada." : editing ? "Aula atualizada." : "Aula agendada.",
       );
-      return;
+      await invalidate();
+      onOpenChange(false);
+    } catch (error) {
+      const message = errorMessage(error, "Não foi possível salvar a aula.");
+      toast.error(message.includes("Conflito") ? "Conflito de horário com outra aula." : message);
+    } finally {
+      setSaving(false);
     }
-    toast.success(
-      duplicating ? "Aula duplicada." : editing ? "Aula atualizada." : "Aula agendada.",
-    );
-    invalidate();
-    onOpenChange(false);
   };
 
   const remove = async () => {
@@ -207,22 +279,27 @@ export function LessonDialog({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {duplicating ? "Duplicar aula" : editing ? "Editar aula" : "Nova aula"}
+            {duplicating
+              ? `Duplicar aula${participants.length > 1 ? " coletiva" : ""}`
+              : editing
+                ? `Editar aula${participants.length > 1 ? " coletiva" : ""}`
+                : `Nova aula${participants.length > 1 ? " coletiva" : ""}`}
           </DialogTitle>
           <DialogDescription>
-            {duplicating
-              ? "Crie uma nova aula a partir desta, ajustando o que precisar."
-              : editing
-                ? "Altere, remarque ou cancele esta aula."
-                : "Agende dentro dos seus horários disponíveis."}
+            {participants.length > 1
+              ? "Aula coletiva: ajuste os participantes, programas e demais detalhes."
+              : duplicating
+                ? "Crie uma nova aula a partir desta, ajustando o que precisar."
+                : editing
+                  ? "Altere, remarque ou cancele esta aula."
+                  : "Agende dentro dos seus horários disponíveis."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={save} className="space-y-4">
-          {/* Seleção de Aluno + botão Novo Aluno */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>Aluno</Label>
+              <Label>Alunos</Label>
               <button
                 type="button"
                 onClick={() => setShowNewStudent((v) => !v)}
@@ -232,7 +309,6 @@ export function LessonDialog({
               </button>
             </div>
 
-            {/* Painel inline de cadastro rápido */}
             {showNewStudent ? (
               <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
                 <p className="text-xs font-semibold text-primary">Cadastro rápido de aluno</p>
@@ -307,25 +383,78 @@ export function LessonDialog({
                 </Button>
               </div>
             ) : (
-              <Select value={studentId} onValueChange={setStudentId}>
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      students.length === 0
-                        ? "Nenhum aluno — clique em + Novo aluno"
-                        : "Selecione o aluno"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {students.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                      {s.instrument ? ` · ${s.instrument}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="max-h-52 space-y-1 overflow-y-auto rounded-md border p-2">
+                {students.length === 0 ? (
+                  <p className="px-2 py-3 text-center text-sm text-muted-foreground">
+                    Nenhum aluno. Clique em + Novo aluno.
+                  </p>
+                ) : (
+                  students.map((student) => {
+                    const participant = participants.find((item) => item.studentId === student.id);
+                    const programs = programsByStudent.get(student.id) ?? [];
+                    return (
+                      <div
+                        key={student.id}
+                        className="flex min-h-9 items-center gap-2 rounded px-2 py-1 hover:bg-muted/60"
+                      >
+                        <Checkbox
+                          id={`lesson-student-${student.id}`}
+                          checked={!!participant}
+                          onCheckedChange={(checked) => {
+                            setParticipants((current) => {
+                              if (!checked) {
+                                return current.filter((item) => item.studentId !== student.id);
+                              }
+                              if (current.some((item) => item.studentId === student.id)) {
+                                return current;
+                              }
+                              const program =
+                                programs.find((item) => item.is_primary) ?? programs[0];
+                              return [
+                                ...current,
+                                { studentId: student.id, programId: program?.id },
+                              ];
+                            });
+                          }}
+                        />
+                        <Label
+                          htmlFor={`lesson-student-${student.id}`}
+                          className="min-w-0 flex-1 cursor-pointer truncate font-normal"
+                        >
+                          {student.name}
+                        </Label>
+                        {participant && programs.length > 1 ? (
+                          <Select
+                            value={participant.programId ?? ""}
+                            onValueChange={(programId) =>
+                              setParticipants((current) =>
+                                current.map((item) =>
+                                  item.studentId === student.id ? { ...item, programId } : item,
+                                ),
+                              )
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-36">
+                              <SelectValue placeholder="Programa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {programs.map((program) => (
+                                <SelectItem key={program.id} value={program.id}>
+                                  {program.instrument}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <span className="max-w-32 truncate text-xs text-muted-foreground">
+                            {programs[0]?.instrument ?? student.instrument}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             )}
           </div>
 
@@ -457,7 +586,14 @@ export function LessonDialog({
                 </div>
               </>
             ) : duplicating ? (
-              <Button type="button" variant="ghost" onClick={() => setDuplicating(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setDuplicating(false);
+                  setStatus(draft?.lesson?.status ?? "agendada");
+                }}
+              >
                 ← Voltar
               </Button>
             ) : (
@@ -486,4 +622,12 @@ function nextHour() {
   d.setMinutes(0, 0, 0);
   d.setHours(d.getHours() + 1);
   return d;
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  if (typeof error === "object" && error && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string") return message;
+  }
+  return fallback;
 }

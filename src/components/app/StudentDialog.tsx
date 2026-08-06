@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Upload } from "lucide-react";
+import { Loader2, Plus, Trash2, Upload } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useInvalidateAll } from "@/hooks/useMusicData";
+import { useInvalidateAll, useStudentPrograms } from "@/hooks/useMusicData";
 import {
   DURATIONS,
   INSTRUMENTS,
@@ -12,11 +12,13 @@ import {
   WEEKDAYS,
   initials,
   type Student,
+  type StudentProgram,
 } from "@/lib/domain";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Dialog,
@@ -39,8 +41,6 @@ const EMPTY = {
   name: "",
   whatsapp: "",
   email: "",
-  instrument: "",
-  goal: "",
   notes: "",
   status: "ativo",
   default_weekday: "",
@@ -50,6 +50,46 @@ const EMPTY = {
   default_location: "",
   photo_url: "",
 };
+
+type BillingType = "mensalidade" | "aula_avulsa" | "pacote";
+
+type ProgramDraft = {
+  id?: string;
+  instrument: string;
+  is_primary: boolean;
+  level: string;
+  goal: string;
+  billing_type: BillingType;
+  amount: string;
+  due_day: string;
+  package_lessons: string;
+  auto_billing: boolean;
+};
+
+const emptyProgram = (instrument = "", goal = ""): ProgramDraft => ({
+  instrument,
+  is_primary: true,
+  level: "",
+  goal,
+  billing_type: "mensalidade",
+  amount: "",
+  due_day: "",
+  package_lessons: "",
+  auto_billing: false,
+});
+
+const programToDraft = (program: StudentProgram): ProgramDraft => ({
+  id: program.id,
+  instrument: program.instrument,
+  is_primary: program.is_primary,
+  level: program.level ?? "",
+  goal: program.goal ?? "",
+  billing_type: program.billing_type as BillingType,
+  amount: program.amount === null ? "" : String(program.amount),
+  due_day: program.due_day === null ? "" : String(program.due_day),
+  package_lessons: program.package_lessons === null ? "" : String(program.package_lessons),
+  auto_billing: program.auto_billing,
+});
 
 export function StudentDialog({
   student,
@@ -62,19 +102,20 @@ export function StudentDialog({
 }) {
   const { user } = useAuth();
   const invalidate = useInvalidateAll();
+  const { data: studentPrograms, isLoading: loadingPrograms } = useStudentPrograms(student?.id);
   const [form, setForm] = useState({ ...EMPTY });
+  const [programs, setPrograms] = useState<ProgramDraft[]>([emptyProgram()]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    if (student && loadingPrograms) return;
     if (student) {
       setForm({
         name: student.name,
         whatsapp: student.whatsapp ?? "",
         email: student.email ?? "",
-        instrument: student.instrument ?? "",
-        goal: student.goal ?? "",
         notes: student.notes ?? "",
         status: student.status,
         default_weekday: student.default_weekday === null ? "" : String(student.default_weekday),
@@ -84,12 +125,52 @@ export function StudentDialog({
         default_location: student.default_location ?? "",
         photo_url: student.photo_url ?? "",
       });
+      const drafts = (studentPrograms ?? []).map(programToDraft);
+      if (drafts.length > 0 && !drafts.some((program) => program.is_primary)) {
+        drafts[0] = { ...drafts[0]!, is_primary: true };
+      }
+      setPrograms(
+        drafts.length > 0 ? drafts : [emptyProgram(student.instrument ?? "", student.goal ?? "")],
+      );
     } else {
       setForm({ ...EMPTY });
+      setPrograms([emptyProgram()]);
     }
-  }, [student, open]);
+  }, [student, open, studentPrograms, loadingPrograms]);
 
   const set = (key: keyof typeof EMPTY, value: string) => setForm((f) => ({ ...f, [key]: value }));
+
+  const setProgram = <K extends keyof ProgramDraft>(
+    index: number,
+    key: K,
+    value: ProgramDraft[K],
+  ) => {
+    setPrograms((current) =>
+      current.map((program, programIndex) =>
+        programIndex === index ? { ...program, [key]: value } : program,
+      ),
+    );
+  };
+
+  const makePrimary = (index: number) => {
+    setPrograms((current) =>
+      current.map((program, programIndex) => ({
+        ...program,
+        is_primary: programIndex === index,
+      })),
+    );
+  };
+
+  const removeProgram = (index: number) => {
+    if (programs.length === 1) return;
+    const removed = programs[index];
+    if (!removed) return;
+    setPrograms((current) => {
+      const next = current.filter((_, programIndex) => programIndex !== index);
+      if (removed.is_primary && next[0]) next[0] = { ...next[0], is_primary: true };
+      return next;
+    });
+  };
 
   const pickPhoto = async (file: File) => {
     if (!user) return;
@@ -106,34 +187,76 @@ export function StudentDialog({
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    setSaving(true);
-    const payload = {
-      teacher_id: user.id,
-      name: form.name.trim(),
-      whatsapp: form.whatsapp || null,
-      email: form.email || null,
-      instrument: form.instrument,
-      goal: form.goal || null,
-      notes: form.notes || null,
-      status: form.status as never,
-      default_weekday: form.default_weekday === "" ? null : Number(form.default_weekday),
-      default_time: form.default_time || null,
-      default_duration: Number(form.default_duration),
-      default_lesson_type: form.default_lesson_type as never,
-      default_location: form.default_location || null,
-      photo_url: form.photo_url || null,
-    };
-    const { error } = student
-      ? await supabase.from("students").update(payload).eq("id", student.id)
-      : await supabase.from("students").insert(payload);
-    setSaving(false);
-    if (error) {
-      toast.error(error.message);
+    if (programs.length === 0 || programs.some((program) => !program.instrument)) {
+      toast.error("Selecione o instrumento de todos os programas.");
       return;
     }
-    toast.success(student ? "Aluno atualizado." : "Aluno cadastrado.");
-    invalidate();
-    onOpenChange(false);
+    if (new Set(programs.map((program) => program.instrument)).size !== programs.length) {
+      toast.error("O mesmo instrumento não pode ser adicionado duas vezes.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const primaryProgram = programs.find((program) => program.is_primary) ?? programs[0]!;
+      const payload = {
+        teacher_id: user.id,
+        name: form.name.trim(),
+        whatsapp: form.whatsapp || null,
+        email: form.email || null,
+        instrument: primaryProgram.instrument,
+        goal: primaryProgram.goal || null,
+        notes: form.notes || null,
+        status: form.status as never,
+        default_weekday: form.default_weekday === "" ? null : Number(form.default_weekday),
+        default_time: form.default_time || null,
+        default_duration: Number(form.default_duration),
+        default_lesson_type: form.default_lesson_type as never,
+        default_location: form.default_location || null,
+        photo_url: form.photo_url || null,
+      };
+      const programRows = programs.map((program) => ({
+        ...(program.id ? { id: program.id } : {}),
+        instrument: program.instrument,
+        is_primary: program.is_primary,
+        level: program.level || null,
+        goal: program.goal || null,
+        billing_type: program.billing_type,
+        amount: program.amount === "" ? null : Number(program.amount),
+        due_day:
+          program.billing_type === "mensalidade" && program.due_day !== ""
+            ? Number(program.due_day)
+            : null,
+        package_lessons:
+          program.billing_type === "pacote" && program.package_lessons !== ""
+            ? Number(program.package_lessons)
+            : null,
+        auto_billing: program.billing_type === "mensalidade" && program.auto_billing,
+        active: true,
+      }));
+
+      const { error } = await supabase.rpc("save_student_with_programs", {
+        p_student: { ...payload, id: student?.id ?? null },
+        p_programs: programRows,
+      });
+      if (error) throw error;
+
+      await invalidate();
+      toast.success(student ? "Aluno atualizado." : "Aluno cadastrado.");
+      onOpenChange(false);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "object" &&
+              error !== null &&
+              "message" in error &&
+              typeof error.message === "string"
+            ? error.message
+            : "Não foi possível salvar o aluno.";
+      toast.error(message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -201,21 +324,6 @@ export function StudentDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label>Instrumento</Label>
-              <Select value={form.instrument} onValueChange={(v) => set("instrument", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione" />
-                </SelectTrigger>
-                <SelectContent>
-                  {INSTRUMENTS.map((i) => (
-                    <SelectItem key={i} value={i}>
-                      {i}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label>Situação</Label>
               <Select value={form.status} onValueChange={(v) => set("status", v)}>
                 <SelectTrigger>
@@ -231,10 +339,6 @@ export function StudentDialog({
               </Select>
             </div>
             <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="obj">Objetivo</Label>
-              <Input id="obj" value={form.goal} onChange={(e) => set("goal", e.target.value)} />
-            </div>
-            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="notas">Observações</Label>
               <Textarea
                 id="notas"
@@ -243,6 +347,155 @@ export function StudentDialog({
                 onChange={(e) => set("notes", e.target.value)}
               />
             </div>
+          </section>
+
+          <section className="space-y-3 rounded-lg border border-border bg-surface p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-medium">Instrumentos e planos</h3>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setPrograms((current) => [...current, { ...emptyProgram(), is_primary: false }])
+                }
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar instrumento
+              </Button>
+            </div>
+
+            {programs.map((program, index) => (
+              <div
+                key={program.id ?? index}
+                className="space-y-3 rounded-md border bg-background p-3"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Button
+                    type="button"
+                    variant={program.is_primary ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => makePrimary(index)}
+                  >
+                    {program.is_primary ? "Principal" : "Marcar principal"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Remover instrumento"
+                    disabled={programs.length === 1}
+                    onClick={() => removeProgram(index)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Instrumento</Label>
+                    <Select
+                      value={program.instrument}
+                      onValueChange={(value) => setProgram(index, "instrument", value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {INSTRUMENTS.map((instrument) => (
+                          <SelectItem key={instrument} value={instrument}>
+                            {instrument}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`nivel-${index}`}>Nível</Label>
+                    <Input
+                      id={`nivel-${index}`}
+                      value={program.level}
+                      onChange={(event) => setProgram(index, "level", event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                    <Label htmlFor={`objetivo-${index}`}>Objetivo</Label>
+                    <Input
+                      id={`objetivo-${index}`}
+                      value={program.goal}
+                      onChange={(event) => setProgram(index, "goal", event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Modalidade</Label>
+                    <Select
+                      value={program.billing_type}
+                      onValueChange={(value: BillingType) =>
+                        setProgram(index, "billing_type", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mensalidade">Mensalidade</SelectItem>
+                        <SelectItem value="aula_avulsa">Aula avulsa</SelectItem>
+                        <SelectItem value="pacote">Pacote</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`valor-${index}`}>Valor</Label>
+                    <Input
+                      id={`valor-${index}`}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={program.amount}
+                      onChange={(event) => setProgram(index, "amount", event.target.value)}
+                    />
+                  </div>
+                  {program.billing_type === "mensalidade" && (
+                    <div className="space-y-2">
+                      <Label htmlFor={`vencimento-${index}`}>Dia do vencimento</Label>
+                      <Input
+                        id={`vencimento-${index}`}
+                        type="number"
+                        min="1"
+                        max="28"
+                        value={program.due_day}
+                        onChange={(event) => setProgram(index, "due_day", event.target.value)}
+                      />
+                    </div>
+                  )}
+                  {program.billing_type === "pacote" && (
+                    <div className="space-y-2">
+                      <Label htmlFor={`aulas-pacote-${index}`}>Quantidade de aulas</Label>
+                      <Input
+                        id={`aulas-pacote-${index}`}
+                        type="number"
+                        min="1"
+                        value={program.package_lessons}
+                        onChange={(event) =>
+                          setProgram(index, "package_lessons", event.target.value)
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {program.billing_type === "mensalidade" && (
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id={`cobranca-${index}`}
+                      checked={program.auto_billing}
+                      onCheckedChange={(checked) => setProgram(index, "auto_billing", checked)}
+                    />
+                    <Label htmlFor={`cobranca-${index}`}>Geração automática de cobrança</Label>
+                  </div>
+                )}
+              </div>
+            ))}
           </section>
 
           <section className="space-y-3 rounded-lg border border-border bg-surface p-4">

@@ -10,8 +10,15 @@ import {
 } from "@/components/ui/command";
 import { useLessons, useMaterials, useStudents } from "@/hooks/useMusicData";
 import { formatDateTime } from "@/lib/dates";
+import { lessonStudentLabel } from "@/lib/domain";
 
-export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+export function GlobalSearch({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+}) {
   const navigate = useNavigate();
   const { data: students = [] } = useStudents();
   const { data: lessons = [] } = useLessons();
@@ -46,19 +53,25 @@ export function GlobalSearch({ open, onOpenChange }: { open: boolean; onOpenChan
           {lessons.slice(0, 20).map((l) => (
             <CommandItem
               key={l.id}
-              value={`aula ${l.student?.name ?? ""} ${formatDateTime(l.starts_at)}`}
+              value={`aula ${lessonStudentLabel(l)} ${formatDateTime(l.starts_at)}`}
               onSelect={() => go("/agenda")}
             >
               <CalendarDays className="h-4 w-4 text-muted-foreground" />
-              <span>{l.student?.name ?? "Aula"}</span>
-              <span className="ml-auto text-xs text-muted-foreground">{formatDateTime(l.starts_at)}</span>
+              <span>{lessonStudentLabel(l)}</span>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {formatDateTime(l.starts_at)}
+              </span>
             </CommandItem>
           ))}
         </CommandGroup>
 
         <CommandGroup heading="Materiais">
           {materials.slice(0, 20).map((m) => (
-            <CommandItem key={m.id} value={`material ${m.title}`} onSelect={() => go("/biblioteca")}>
+            <CommandItem
+              key={m.id}
+              value={`material ${m.title}`}
+              onSelect={() => go("/biblioteca")}
+            >
               <FileText className="h-4 w-4 text-muted-foreground" />
               <span>{m.title}</span>
             </CommandItem>

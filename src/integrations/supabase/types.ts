@@ -68,6 +68,136 @@ export type Database = {
         }
         Relationships: []
       }
+      financial_transactions: {
+        Row: {
+          amount: number
+          category: string
+          competence_date: string
+          created_at: string
+          description: string
+          due_date: string
+          id: string
+          paid_at: string | null
+          payment_method: string
+          source_key: string | null
+          status: string
+          student_id: string | null
+          student_name: string | null
+          student_program_id: string | null
+          teacher_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          competence_date?: string
+          created_at?: string
+          description: string
+          due_date: string
+          id?: string
+          paid_at?: string | null
+          payment_method?: string
+          source_key?: string | null
+          status?: string
+          student_id?: string | null
+          student_name?: string | null
+          student_program_id?: string | null
+          teacher_id: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          competence_date?: string
+          created_at?: string
+          description?: string
+          due_date?: string
+          id?: string
+          paid_at?: string | null
+          payment_method?: string
+          source_key?: string | null
+          status?: string
+          student_id?: string | null
+          student_name?: string | null
+          student_program_id?: string | null
+          teacher_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financial_transactions_student_program_id_fkey"
+            columns: ["student_program_id"]
+            isOneToOne: false
+            referencedRelation: "student_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lesson_participants: {
+        Row: {
+          attendance: string
+          created_at: string
+          id: string
+          lesson_id: string
+          notes: string | null
+          student_id: string
+          student_program_id: string | null
+          teacher_id: string
+        }
+        Insert: {
+          attendance?: string
+          created_at?: string
+          id?: string
+          lesson_id: string
+          notes?: string | null
+          student_id: string
+          student_program_id?: string | null
+          teacher_id: string
+        }
+        Update: {
+          attendance?: string
+          created_at?: string
+          id?: string
+          lesson_id?: string
+          notes?: string | null
+          student_id?: string
+          student_program_id?: string | null
+          teacher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_participants_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_participants_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lesson_participants_student_program_id_fkey"
+            columns: ["student_program_id"]
+            isOneToOne: false
+            referencedRelation: "student_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lesson_reports: {
         Row: {
           content: string | null
@@ -76,6 +206,7 @@ export type Database = {
           id: string
           lesson_id: string
           notes: string | null
+          scope: string
           student_id: string | null
           teacher_id: string
           updated_at: string
@@ -87,6 +218,7 @@ export type Database = {
           id?: string
           lesson_id: string
           notes?: string | null
+          scope?: string
           student_id?: string | null
           teacher_id: string
           updated_at?: string
@@ -98,6 +230,7 @@ export type Database = {
           id?: string
           lesson_id?: string
           notes?: string | null
+          scope?: string
           student_id?: string | null
           teacher_id?: string
           updated_at?: string
@@ -106,7 +239,7 @@ export type Database = {
           {
             foreignKeyName: "lesson_reports_lesson_id_fkey"
             columns: ["lesson_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
@@ -249,6 +382,68 @@ export type Database = {
         }
         Relationships: []
       }
+      student_programs: {
+        Row: {
+          active: boolean
+          amount: number | null
+          auto_billing: boolean
+          billing_type: string
+          created_at: string
+          due_day: number | null
+          goal: string | null
+          id: string
+          instrument: string
+          is_primary: boolean
+          level: string | null
+          package_lessons: number | null
+          student_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          amount?: number | null
+          auto_billing?: boolean
+          billing_type?: string
+          created_at?: string
+          due_day?: number | null
+          goal?: string | null
+          id?: string
+          instrument: string
+          is_primary?: boolean
+          level?: string | null
+          package_lessons?: number | null
+          student_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          amount?: number | null
+          auto_billing?: boolean
+          billing_type?: string
+          created_at?: string
+          due_day?: number | null
+          goal?: string | null
+          id?: string
+          instrument?: string
+          is_primary?: boolean
+          level?: string | null
+          package_lessons?: number | null
+          student_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "student_programs_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       students: {
         Row: {
           created_at: string
@@ -314,7 +509,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_monthly_charges: {
+        Args: { p_competence?: string }
+        Returns: number
+      }
+      save_lesson_assessments: {
+        Args: { p_general: Json; p_individuals: Json; p_lesson_id: string }
+        Returns: undefined
+      }
+      save_lesson_with_participants: {
+        Args: { p_lesson: Json; p_lesson_id: string | null; p_participants: Json }
+        Returns: string
+      }
+      save_student_with_programs: {
+        Args: { p_programs: Json; p_student: Json }
+        Returns: string
+      }
     }
     Enums: {
       lesson_status: "agendada" | "realizada" | "cancelada" | "remarcada"

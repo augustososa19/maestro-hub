@@ -11,9 +11,11 @@ import type {
   Material,
   Profile,
   Student,
+  StudentProgram,
 } from "@/lib/domain";
 
-const LESSON_SELECT = "*, student:students(id, name, photo_url, instrument)";
+const LESSON_SELECT =
+  "*, student:students(id, name, photo_url, instrument), participants:lesson_participants(*, student:students(id, name, photo_url, instrument), program:student_programs(id, instrument))";
 
 export function useProfile() {
   const { user } = useAuth();
@@ -76,7 +78,10 @@ export function useLessons(range?: { from: Date; to: Date }) {
       }
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []) as unknown as LessonWithStudent[];
+      return (data ?? []).map((lesson) => ({
+        ...lesson,
+        participants: Array.isArray(lesson.participants) ? lesson.participants : [],
+      })) as unknown as LessonWithStudent[];
     },
   });
 }
@@ -86,14 +91,25 @@ export function useStudentLessons(studentId: string) {
   return useQuery({
     queryKey: ["student-lessons", studentId, user?.id],
     enabled: !!user && !!studentId,
-    queryFn: async (): Promise<Lesson[]> => {
-      const { data, error } = await supabase
-        .from("lessons")
-        .select("*")
-        .eq("student_id", studentId)
-        .order("starts_at", { ascending: false });
+    queryFn: async (): Promise<LessonWithStudent[]> => {
+      const { data: participantRows, error: participantError } = await supabase
+        .from("lesson_participants")
+        .select("lesson_id")
+        .eq("student_id", studentId);
+      if (participantError) throw participantError;
+
+      const lessonIds = [...new Set((participantRows ?? []).map((row) => row.lesson_id))];
+      let query = supabase.from("lessons").select(LESSON_SELECT);
+      query = lessonIds.length
+        ? query.or(`student_id.eq.${studentId},id.in.(${lessonIds.join(",")})`)
+        : query.eq("student_id", studentId);
+
+      const { data, error } = await query.order("starts_at", { ascending: false });
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map((lesson) => ({
+        ...lesson,
+        participants: Array.isArray(lesson.participants) ? lesson.participants : [],
+      })) as unknown as LessonWithStudent[];
     },
   });
 }
@@ -104,11 +120,37 @@ export function useStudentReports(studentId: string) {
     queryKey: ["student-reports", studentId, user?.id],
     enabled: !!user && !!studentId,
     queryFn: async (): Promise<LessonReport[]> => {
-      const { data, error } = await supabase
-        .from("lesson_reports")
-        .select("*")
-        .eq("student_id", studentId)
-        .order("created_at", { ascending: false });
+      const [participantsResult, legacyLessonsResult, reportsResult] = await Promise.all([
+        supabase.from("lesson_participants").select("lesson_id").eq("student_id", studentId),
+        supabase.from("lessons").select("id").eq("student_id", studentId),
+        supabase.from("lesson_reports").select("*").order("created_at", { ascending: false }),
+      ]);
+      if (participantsResult.error) throw participantsResult.error;
+      if (legacyLessonsResult.error) throw legacyLessonsResult.error;
+      if (reportsResult.error) throw reportsResult.error;
+
+      const lessonIds = new Set([
+        ...(participantsResult.data ?? []).map((row) => row.lesson_id),
+        ...(legacyLessonsResult.data ?? []).map((row) => row.id),
+      ]);
+      return (reportsResult.data ?? []).filter(
+        (report) =>
+          report.student_id === studentId ||
+          (report.scope === "geral" && lessonIds.has(report.lesson_id)),
+      );
+    },
+  });
+}
+
+export function useStudentPrograms(studentId?: string) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["student-programs", user?.id, studentId ?? "all"],
+    enabled: !!user,
+    queryFn: async (): Promise<StudentProgram[]> => {
+      let query = supabase.from("student_programs").select("*").order("instrument");
+      if (studentId) query = query.eq("student_id", studentId);
+      const { data, error } = await query;
       if (error) throw error;
       return data ?? [];
     },
@@ -173,6 +215,9 @@ export function useInvalidateAll() {
       "availability",
       "blocked",
       "profile",
+      "student-programs",
+      "lesson-participants",
+      "financial-transactions",
     ]) {
       qc.invalidateQueries({ queryKey: [key] });
     }
@@ -192,94 +237,57 @@ export function useDeleteMutation(
   });
 }
 
-// Sample initial transactions for demonstration
-const INITIAL_TRANSACTIONS = [
-  {
-    id: "tx-1",
-    student_name: "Lucas Mendes",
-    description: "Mensalidade Agosto - Violão",
-    amount: 320,
-    type: "receita" as const,
-    category: "mensalidade" as const,
-    status: "pago" as const,
-    payment_method: "pix" as const,
-    due_date: "2026-08-05",
-    paid_at: "2026-08-02",
-  },
-  {
-    id: "tx-2",
-    student_name: "Mariana Costa",
-    description: "Mensalidade Agosto - Piano",
-    amount: 380,
-    type: "receita" as const,
-    category: "mensalidade" as const,
-    status: "pago" as const,
-    payment_method: "pix" as const,
-    due_date: "2026-08-10",
-    paid_at: "2026-08-04",
-  },
-  {
-    id: "tx-3",
-    student_name: "Gabriel Santos",
-    description: "Pacote 4 Aulas - Guitarra",
-    amount: 400,
-    type: "receita" as const,
-    category: "pacote" as const,
-    status: "pendente" as const,
-    payment_method: "cartao" as const,
-    due_date: "2026-08-12",
-  },
-  {
-    id: "tx-4",
-    student_name: "Beatriz Lima",
-    description: "Mensalidade Julho - Canto (Atrasado)",
-    amount: 350,
-    type: "receita" as const,
-    category: "mensalidade" as const,
-    status: "atrasado" as const,
-    payment_method: "pix" as const,
-    due_date: "2026-07-28",
-  },
-  {
-    id: "tx-5",
-    description: "Manutenção de Instrumentos & Cabos",
-    amount: 150,
-    type: "despesa" as const,
-    category: "equipamento" as const,
-    status: "pago" as const,
-    payment_method: "pix" as const,
-    due_date: "2026-08-01",
-    paid_at: "2026-08-01",
-  },
-];
-
-function readTransactions() {
-  const stored = localStorage.getItem("maestro_transactions");
-  if (!stored) return INITIAL_TRANSACTIONS;
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return INITIAL_TRANSACTIONS;
-  }
-}
-export function useFinancialTransactions() {
+export function useFinancialTransactions(month?: string) {
   const { user } = useAuth();
   return useQuery({
-    queryKey: ["financial-transactions", user?.id],
-    queryFn: () => readTransactions(),
+    queryKey: ["financial-transactions", user?.id, month ?? "all"],
+    enabled: !!user,
+    queryFn: async (): Promise<FinancialTransaction[]> => {
+      const now = new Date();
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+      if (!month || month === currentMonth) {
+        const { error } = await supabase.rpc("generate_monthly_charges", {
+          p_competence: `${month ?? currentMonth}-01`,
+        });
+        if (error) throw error;
+      }
+
+      let query = supabase
+        .from("financial_transactions")
+        .select("*")
+        .order("due_date", { ascending: false });
+      if (month) {
+        const [year, monthNumber] = month.split("-").map(Number);
+        const nextMonth = new Date(Date.UTC(year!, monthNumber!, 1)).toISOString().slice(0, 10);
+        query = query.gte("competence_date", `${month}-01`).lt("competence_date", nextMonth);
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []) as unknown as FinancialTransaction[];
+    },
   });
 }
 
+type AddFinancialTransactionInput = Omit<
+  FinancialTransaction,
+  "id" | "teacher_id" | "competence_date"
+> & {
+  competence_date?: string;
+};
+
 export function useAddFinancialTransaction() {
+  const { user } = useAuth();
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (tx: Omit<FinancialTransaction, "id">) => {
-      const current = readTransactions();
-
-      const newTx = { ...tx, id: `tx-${Date.now()}` };
-      const updated = [newTx, ...current];
-      localStorage.setItem("maestro_transactions", JSON.stringify(updated));
-      return newTx;
+    mutationFn: async (tx: AddFinancialTransactionInput): Promise<FinancialTransaction> => {
+      if (!user) throw new Error("Usuário não autenticado.");
+      const { data, error } = await supabase
+        .from("financial_transactions")
+        .insert({ ...tx, teacher_id: user.id })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data as unknown as FinancialTransaction;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["financial-transactions"] });
@@ -290,11 +298,19 @@ export function useAddFinancialTransaction() {
 export function useUpdateFinancialTransaction() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (tx: { id: string; status?: string; paid_at?: string | null }) => {
-      const current = readTransactions();
-      const updated = current.map((t: { id: string }) => (t.id === tx.id ? { ...t, ...tx } : t));
-      localStorage.setItem("maestro_transactions", JSON.stringify(updated));
-      return updated;
+    mutationFn: async ({
+      id,
+      ...updates
+    }: Pick<FinancialTransaction, "id"> &
+      Partial<Omit<FinancialTransaction, "id" | "teacher_id">>): Promise<FinancialTransaction> => {
+      const { data, error } = await supabase
+        .from("financial_transactions")
+        .update(updates)
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data as unknown as FinancialTransaction;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["financial-transactions"] });
@@ -306,10 +322,8 @@ export function useDeleteFinancialTransaction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const current = readTransactions();
-      const updated = current.filter((t: { id: string }) => t.id !== id);
-      localStorage.setItem("maestro_transactions", JSON.stringify(updated));
-      return updated;
+      const { error } = await supabase.from("financial_transactions").delete().eq("id", id);
+      if (error) throw error;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["financial-transactions"] });

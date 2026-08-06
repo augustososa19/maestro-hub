@@ -3,7 +3,7 @@ import { differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { format } from "date-fns";
 import { useFinancialTransactions, useLessons } from "@/hooks/useMusicData";
-import type { FinancialTransaction } from "@/lib/domain";
+import { lessonStudentLabel, type FinancialTransaction } from "@/lib/domain";
 
 export type ReminderKind = "lesson" | "payment";
 export type ReminderSeverity = "info" | "warning" | "danger";
@@ -43,7 +43,7 @@ export function useReminders() {
     for (const lesson of todayLessons) {
       const start = new Date(lesson.starts_at);
       const mins = differenceInMinutes(start, now);
-      const student = lesson.student?.name ?? "Aula";
+      const student = lessonStudentLabel(lesson);
       const time = format(start, "HH:mm", { locale: ptBR });
 
       if (mins >= 0 && mins <= SOON_WINDOW_MINUTES) {

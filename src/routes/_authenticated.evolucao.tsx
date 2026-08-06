@@ -1,22 +1,11 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  Award,
-  BookOpen,
-  Check,
-  ChevronRight,
-  Clock,
-  GraduationCap,
-  Lock,
-  Sparkles,
-  Trophy,
-} from "lucide-react";
+import { Award, Check, Clock, GraduationCap, Lock, Sparkles, Trophy } from "lucide-react";
 import { DEFAULT_CURRICULUM_MODULES, type CurriculumModule } from "@/lib/domain";
-import { useStudentReports, useStudents } from "@/hooks/useMusicData";
-import { Button } from "@/components/ui/button";
+import { useStudentPrograms, useStudentReports, useStudents } from "@/hooks/useMusicData";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PageHeader, EmptyState, StatusBadge } from "@/components/app/primitives";
+import { PageHeader, EmptyState } from "@/components/app/primitives";
 import { cn } from "@/lib/utils";
 
 const STORAGE_PREFIX = "maestro_curriculum_";
@@ -62,51 +51,91 @@ function levelMeta(level: string) {
   );
 }
 
+function loadModules(storageKey: string): CurriculumModule[] {
+  if (!storageKey) return DEFAULT_CURRICULUM_MODULES;
+  try {
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return DEFAULT_CURRICULUM_MODULES;
+    const saved = JSON.parse(raw) as CurriculumModule[];
+    if (!Array.isArray(saved) || saved.length === 0) return DEFAULT_CURRICULUM_MODULES;
+    return saved;
+  } catch {
+    return DEFAULT_CURRICULUM_MODULES;
+  }
+}
+
 function EvolucaoPage() {
   const { data: students = [] } = useStudents();
   const [selectedStudentId, setSelectedStudentId] = useState<string>(students[0]?.id ?? "");
   const selectedStudent = students.find((s) => s.id === selectedStudentId) || students[0];
-
+  const { data: programs = [] } = useStudentPrograms(selectedStudent?.id);
   const { data: reports = [] } = useStudentReports(selectedStudent?.id ?? "");
+  const [selectedProgramId, setSelectedProgramId] = useState("");
   const [modules, setModules] = useState<CurriculumModule[]>(DEFAULT_CURRICULUM_MODULES);
+  const studentPrograms = programs.filter((program) => program.student_id === selectedStudent?.id);
+  const selectedProgram =
+    studentPrograms.find((program) => program.id === selectedProgramId) ??
+    studentPrograms.find((program) => program.is_primary) ??
+    studentPrograms[0];
+  const storageKey = selectedStudent?.id
+    ? selectedProgram
+      ? `${STORAGE_PREFIX}${selectedStudent.id}_${selectedProgram.id}`
+      : `${STORAGE_PREFIX}${selectedStudent.id}`
+    : "";
 
-  const loadModules = (studentId: string): CurriculumModule[] => {
-    if (!studentId) return DEFAULT_CURRICULUM_MODULES;
-    try {
-      const raw = localStorage.getItem(STORAGE_PREFIX + studentId);
-      if (!raw) return DEFAULT_CURRICULUM_MODULES;
-      const saved = JSON.parse(raw) as CurriculumModule[];
-      if (!Array.isArray(saved) || saved.length === 0) return DEFAULT_CURRICULUM_MODULES;
-      return saved;
-    } catch {
-      return DEFAULT_CURRICULUM_MODULES;
+  useEffect(() => {
+    if (students.length > 0 && !students.some((student) => student.id === selectedStudentId)) {
+      setSelectedStudentId(students[0]!.id);
     }
-  };
+  }, [selectedStudentId, students]);
 
   useEffect(() => {
-    if (!selectedStudentId) return;
-    setModules(loadModules(selectedStudentId));
-  }, [selectedStudentId]);
+    const availablePrograms = programs.filter(
+      (program) => program.student_id === selectedStudent?.id,
+    );
+    const primaryProgram =
+      availablePrograms.find((program) => program.is_primary) ?? availablePrograms[0];
+    setSelectedProgramId((current) =>
+      availablePrograms.some((program) => program.id === current)
+        ? current
+        : (primaryProgram?.id ?? ""),
+    );
+  }, [selectedStudent?.id, programs]);
 
   useEffect(() => {
-    if (!selectedStudentId) return;
+    if (!storageKey) return;
+    const legacyKey = selectedStudent?.id ? `${STORAGE_PREFIX}${selectedStudent.id}` : "";
     try {
-      localStorage.setItem(STORAGE_PREFIX + selectedStudentId, JSON.stringify(modules));
+      const hasProgramProgress = localStorage.getItem(storageKey) !== null;
+      const canMigrateLegacy = selectedProgram?.is_primary && legacyKey && legacyKey !== storageKey;
+      if (!hasProgramProgress && canMigrateLegacy && localStorage.getItem(legacyKey)) {
+        const legacyModules = loadModules(legacyKey);
+        localStorage.setItem(storageKey, JSON.stringify(legacyModules));
+        setModules(legacyModules);
+        return;
+      }
     } catch {
       void 0;
     }
-  }, [modules, selectedStudentId]);
+    setModules(loadModules(storageKey));
+  }, [selectedProgram?.is_primary, selectedStudent?.id, storageKey]);
 
   const toggleTopic = (modId: string, topicId: string) => {
-    setModules((prev) =>
-      prev.map((mod) => {
+    setModules((prev) => {
+      const next = prev.map((mod) => {
         if (mod.id !== modId) return mod;
         return {
           ...mod,
           topics: mod.topics.map((t) => (t.id === topicId ? { ...t, completed: !t.completed } : t)),
         };
-      }),
-    );
+      });
+      try {
+        if (storageKey) localStorage.setItem(storageKey, JSON.stringify(next));
+      } catch {
+        void 0;
+      }
+      return next;
+    });
   };
 
   const totalTopics = modules.flatMap((m) => m.topics).length;
@@ -120,20 +149,39 @@ function EvolucaoPage() {
         title="Evolução & Cronograma"
         description="Acompanhe o desenvolvimento pedagógico e o progresso dos alunos por módulo."
         actions={
-          <label className="flex items-center gap-2 text-sm">
-            <span className="text-muted-foreground">Aluno:</span>
-            <select
-              value={selectedStudent?.id ?? ""}
-              onChange={(e) => setSelectedStudentId(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              {students.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name} ({s.instrument})
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <label className="flex min-w-0 items-center gap-2 text-sm">
+              <span className="shrink-0 text-muted-foreground">Aluno:</span>
+              <select
+                value={selectedStudent?.id ?? ""}
+                onChange={(e) => setSelectedStudentId(e.target.value)}
+                className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring sm:max-w-52"
+              >
+                {students.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.instrument})
+                  </option>
+                ))}
+              </select>
+            </label>
+            {studentPrograms.length > 1 && (
+              <label className="flex min-w-0 items-center gap-2 text-sm">
+                <span className="shrink-0 text-muted-foreground">Programa:</span>
+                <select
+                  value={selectedProgram?.id ?? ""}
+                  onChange={(e) => setSelectedProgramId(e.target.value)}
+                  className="min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium transition-colors hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-ring sm:max-w-48"
+                >
+                  {studentPrograms.map((program) => (
+                    <option key={program.id} value={program.id}>
+                      {program.instrument}
+                      {program.is_primary ? " (principal)" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
         }
       />
 
@@ -166,11 +214,17 @@ function EvolucaoPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="truncate text-lg font-semibold">{selectedStudent.name}</h2>
                   <span className="inline-flex items-center gap-1 rounded-full border border-transparent bg-primary/15 px-2.5 py-0.5 text-xs font-semibold text-primary">
-                    <Sparkles className="h-3 w-3" /> Nível {level}
+                    <Sparkles className="h-3 w-3" /> Nível calculado {level}
                   </span>
+                  {selectedProgram?.level && (
+                    <Badge variant="outline" className="text-xs">
+                      Nível cadastrado: {selectedProgram.level}
+                    </Badge>
+                  )}
                 </div>
-                <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                  {selectedStudent.instrument} · {selectedStudent.goal || "Desenvolvimento Geral"}
+                <p className="mt-0.5 break-words text-sm text-muted-foreground">
+                  {selectedProgram?.instrument ?? selectedStudent.instrument} ·{" "}
+                  {selectedProgram?.goal || selectedStudent.goal || "Desenvolvimento Geral"}
                 </p>
               </div>
             </div>
