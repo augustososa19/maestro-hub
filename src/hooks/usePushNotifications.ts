@@ -47,7 +47,8 @@ export function usePushNotifications() {
     "serviceWorker" in navigator &&
     "PushManager" in window &&
     "Notification" in window;
-  const publicKey = import.meta.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined;
+  const publicKey =
+    (import.meta.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined) || VAPID_PUBLIC_KEY;
 
   const preferencesQuery = useNotificationPreferences();
 
