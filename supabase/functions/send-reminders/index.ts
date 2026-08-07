@@ -4,10 +4,7 @@ import webpush from "npm:web-push@3.6.7";
 const corsHeaders = { "content-type": "application/json" };
 
 Deno.serve(async (request) => {
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  if (!cronSecret || request.headers.get("x-cron-secret") !== cronSecret) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: corsHeaders });
-  }
+  const providedSecret = request.headers.get("x-cron-secret");
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -21,10 +18,21 @@ Deno.serve(async (request) => {
     });
   }
 
-  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // O segredo do agendador fica no Vault do banco; CRON_SECRET é apenas fallback.
+  const { data: vaultSecret } = await supabase.rpc("get_cron_secret");
+  const expectedSecret = (vaultSecret as string | null) ?? Deno.env.get("CRON_SECRET") ?? null;
+  if (!expectedSecret || !providedSecret || providedSecret !== expectedSecret) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: corsHeaders,
+    });
+  }
+
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
   const now = new Date();
   const windowStart = new Date(now.getTime() - 15 * 60_000);
   const windowEnd = new Date(now.getTime() + 3 * 60_000);
