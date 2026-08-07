@@ -10,6 +10,10 @@ export type NotificationPreferences = {
   payment_notifications: boolean;
 };
 
+// Chave pública VAPID (não é segredo): fallback caso a variável de ambiente não esteja presente.
+const VAPID_PUBLIC_KEY =
+  "BLbudVjieivJryNP6G1axPu_Q_9eH4Tw92LXGZ5GHWTgjiI60t9UqSsj56T_18VysishfSwQFUSk0rbTAo060rI";
+
 const DEFAULT_PREFERENCES: NotificationPreferences = {
   enabled: false,
   lesson_minutes: 30,
