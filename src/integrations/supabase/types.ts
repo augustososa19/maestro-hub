@@ -726,6 +726,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_notification_delivery: {
+        Args: {
+          p_reminder_at: string
+          p_resource_id: string
+          p_resource_type: string
+          p_subscription_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
       claim_push_subscription: {
         Args: {
           p_auth: string
@@ -743,6 +753,7 @@ export type Database = {
         Args: { p_competence?: string }
         Returns: number
       }
+      get_cron_secret: { Args: never; Returns: string }
       save_lesson_assessments: {
         Args: { p_general: Json; p_individuals: Json; p_lesson_id: string }
         Returns: undefined
