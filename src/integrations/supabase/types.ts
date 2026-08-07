@@ -89,6 +89,60 @@ export type Database = {
         }
         Relationships: []
       }
+      calendar_events: {
+        Row: {
+          all_day: boolean
+          blocks_lessons: boolean
+          created_at: string
+          description: string | null
+          end_date: string | null
+          ends_at: string
+          id: string
+          location: string | null
+          reminder_minutes: number | null
+          start_date: string | null
+          starts_at: string
+          status: string
+          teacher_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          all_day?: boolean
+          blocks_lessons?: boolean
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          ends_at: string
+          id?: string
+          location?: string | null
+          reminder_minutes?: number | null
+          start_date?: string | null
+          starts_at: string
+          status?: string
+          teacher_id: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          all_day?: boolean
+          blocks_lessons?: boolean
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          ends_at?: string
+          id?: string
+          location?: string | null
+          reminder_minutes?: number | null
+          start_date?: string | null
+          starts_at?: string
+          status?: string
+          teacher_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       financial_transactions: {
         Row: {
           amount: number
@@ -399,6 +453,86 @@ export type Database = {
           },
         ]
       }
+      notification_deliveries: {
+        Row: {
+          claimed_at: string
+          created_at: string
+          error: string | null
+          id: string
+          reminder_at: string
+          resource_id: string
+          resource_type: string
+          sent_at: string | null
+          status: string
+          subscription_id: string | null
+          user_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          reminder_at: string
+          resource_id: string
+          resource_type: string
+          sent_at?: string | null
+          status?: string
+          subscription_id?: string | null
+          user_id: string
+        }
+        Update: {
+          claimed_at?: string
+          created_at?: string
+          error?: string | null
+          id?: string
+          reminder_at?: string
+          resource_id?: string
+          resource_type?: string
+          sent_at?: string | null
+          status?: string
+          subscription_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_deliveries_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "push_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notification_preferences: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          event_minutes: number
+          lesson_minutes: number
+          payment_notifications: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          event_minutes?: number
+          lesson_minutes?: number
+          payment_notifications?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          event_minutes?: number
+          lesson_minutes?: number
+          payment_notifications?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -429,6 +563,39 @@ export type Database = {
           timezone?: string
           updated_at?: string
           whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -559,6 +726,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_notification_delivery: {
+        Args: {
+          p_reminder_at: string
+          p_resource_id: string
+          p_resource_type: string
+          p_subscription_id: string
+          p_user_id: string
+        }
+        Returns: string
+      }
+      claim_push_subscription: {
+        Args: {
+          p_auth: string
+          p_endpoint: string
+          p_p256dh: string
+          p_user_agent: string
+        }
+        Returns: undefined
+      }
       delete_financial_transaction: {
         Args: { p_id: string }
         Returns: undefined
